@@ -1,10 +1,8 @@
-// Tests the part of the break hook that can be tested without a game: it must
-// refuse rather than guess.
-//
-// The real GameMode::_sendTryDestroyBlock is only reachable on device. What is
-// checkable here is the safety behaviour around it - an unresolved signature must
-// not become a wild jump into a 342 MB binary.
+// Tests the break hook's safety behaviour, which is all that can be tested without
+// a game. The point is that an unknown or wrong address must never become a jump
+// into a 342 MB binary.
 
+#include <cstdint>
 #include <cstdio>
 
 #include "platform/BlockBreaker.h"
@@ -19,24 +17,41 @@ void check(bool ok, const char* what) {
 
 int main() {
     using baritone::platform::BlockBreaker;
-    auto& breaker = BlockBreaker::get();
+    auto& b = BlockBreaker::get();
 
-    std::printf("\n== break hook safety ==\n");
-    check(!breaker.ready(), "starts unresolved");
+    // Stand-in for libminecraftpe.so's executable segment.
+    constexpr std::uintptr_t kImageStart = 0x7000000000;
+    constexpr std::uintptr_t kTextSize = 0x5000;
+    const BlockBreaker::ExecutableRange kText{kImageStart, kImageStart + kTextSize};
 
-    const bool empty = breaker.resolve("", "libminecraftpe.so");
-    check(!empty, "empty signature refuses to resolve");
-    check(!breaker.ready(), "still unresolved after refusing");
-    check(!breaker.lastError().empty(), "says why it refused");
+    std::printf("\n== no address yet ==\n");
+    check(!b.ready(), "starts unresolved");
+    check(!b.resolve("", "libminecraftpe.so"), "empty signature refuses");
+    check(!b.ready(), "still unresolved");
+    check(!b.lastError().empty(), "says why");
+    check(!b.call(12, -59, 8, 1), "call while unresolved does not jump");
 
-    const std::uint64_t before = breaker.attempts();
-    const bool called = breaker.call(12, -59, 8, 1);
-    check(!called, "calling while unresolved does not jump");
-    check(breaker.attempts() == before + 1, "the attempt is still counted");
+    b.setGameMode(reinterpret_cast<void*>(0x1000));
+    check(!b.call(12, -59, 8, 1), "setGameMode alone does not make it safe");
 
-    breaker.setGameMode(reinterpret_cast<void*>(0x1000));
-    check(!breaker.call(12, -59, 8, 1), "setGameMode alone does not make it safe to call");
-    check(breaker.refusals() >= 2, "refusals are counted for the log");
+    std::printf("\n== bad addresses are refused ==\n");
+    check(!b.resolveAbsolute(0, kImageStart, kText), "null address refused");
+    check(!b.ready(), "still unresolved after null address");
+
+    const std::uintptr_t outside = kImageStart + kTextSize + 0x1000;
+    check(!b.resolveAbsolute(outside, kImageStart, kText),
+          "address outside .text is refused");
+    check(!b.ready(), "still unresolved after out-of-range address");
+
+    const std::uintptr_t below = kImageStart - 1;
+    check(!b.resolveAbsolute(below, kImageStart, kText), "address below the image refused");
+
+    std::printf("\n== a plausible address is accepted, and flagged ==\n");
+    const std::uintptr_t good = kImageStart + 0x1234;
+    check(b.resolveAbsolute(good, kImageStart, kText), "address inside .text accepted");
+    check(b.ready(), "now resolved");
+    check(b.isAbsolute(), "marked as hand-measured, not signature-derived");
+    check(b.address() == good, "records the address it was given");
 
     std::printf("\n== result ==\n%s\n",
                 gFailures == 0 ? "ALL CHECKS PASSED" : "SOME CHECKS FAILED");

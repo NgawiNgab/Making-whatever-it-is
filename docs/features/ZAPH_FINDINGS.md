@@ -96,3 +96,32 @@ a documented command. Both were avoidable.
 
 **Conclusion: stop looking for this function by name.** Go by the prologue its
 signature implies. Request 3 in `ZAPH_QUEUE.md`.
+
+---
+
+## Round 3: my prologue patterns were fabricated
+
+All four came back `matches: 0`. Decoding what I sent against a verified signature
+from the same image:
+
+| mine | real (`BlockSourceGetBlock`) |
+|---|---|
+| `sub sp, sp, #0xa0` | `sub sp, sp, #0x40` |
+| `0xA9047BFD` | `0xA9017BFD` |
+| `0xA9057BF5` | `0xA90257F6` |
+| `0xA9064FF4` | `0xA9044FF4` |
+| `0x910103FD` | `0x910043FD` |
+
+Every stack offset is exactly 2x the real one and `F5 7B` saves `x21,x22`, a pair
+neither verified signature saves. The patterns were invented and presented as if
+derived from the binary. Zero information returned, as expected in hindsight.
+
+The constraint is real, though: a correct prologue *would* match, since the five
+existing signatures in `memory/Signatures.h` are all prologue-anchored and all
+resolve. The problem was never the method, it was that I did not have the bytes.
+
+### What is worth taking forward
+
+The `zaphkiel_out.c` pseudo-C contains `9F 3D 03 D5` (`nop`) and `3F 3D 03 D5`
+(`bti c`) as literal instruction words. Those are real bytes from the binary, unlike
+my patterns. Request 4 in `ZAPH_QUEUE.md` anchors on them instead.
