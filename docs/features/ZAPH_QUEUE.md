@@ -5,16 +5,52 @@ into `zInput.txt`, plus what I need back and what I will do with it.
 
 Target: **libminecraftpe.so 1.26.62.1, arm64-v8a.**
 
-Paste the block below into
+Paste the block into
 `/storage/emulated/0/Android/media/org.levimc.launcher/kurumi/zInput.txt`, run
-Zaphkiel once, and give me back the files listed under each request.
+Zaphkiel once, and give me back `zaphkiel_out.txt` (and `zaphkiel_out.c` if it
+appears).
+
+> **Round 1 is done.** It found the function and its exact signature, but not its
+> address — see `ZAPH_FINDINGS.md`. Round 2 below is what closes that.
 
 ---
 
-## Request 1 — the break hook (this is the blocker)
+## Request 2 — the address of the destroy call (the remaining blocker)
 
-Without it the bot walks to a block and stands there, because nothing turns
-"break this" into a game call. Everything else for mining is written.
+Round 1 confirmed the function is
+`GameMode::_sendTryDestroyBlock(BlockPos const&, unsigned char)`. It is non-virtual,
+and `GameMode` has no vtable, so it cannot be found by slot. It can be found through
+the lambda that lives inside it, whose typeinfo string we already have:
+
+```
+h<GameMode>
+string: "ZN8GameMode20_sendTryDestroyBlockERK8BlockPoshE3$_0"
+findclass<sendTryDestroyBlock>
+```
+
+In that order — the first two are the ones that matter.
+
+**What I need back:** `zaphkiel_out.txt`.
+
+**What I am looking for in it:** a string xref to
+`ZN8GameMode20_sendTryDestroyBlockERK8BlockPoshE3$_0`. Because that symbol names an
+anonymous-namespace lambda, the only places it can appear in `.data` are the
+function pointer of the `std::function` built from it, or its typeinfo. Either one
+lands within a few instructions of the code that calls `_sendTryDestroyBlock`, and
+`strfn<...>` decompiles the enclosing function for me.
+
+**How I will use it:** I will not call `_sendTryDestroyBlock` directly. I will hook
+`GameMode`'s block-break path and drive it with the arguments my aim code already
+computes — `BlockPos` from the raycast, face from the raycast normal. Both are
+written and tested (`platform/AimRay.h`, `platform/MineAim.h`).
+
+**Fallback if the xref finds nothing:** `fullvf<...>` on a concrete game-mode
+subclass would give the virtual `startDestroyBlock` wrapper instead. I cannot name
+that subclass — `findclass<GameMode>` returned 99 matches and none was a concrete
+subclass. If `findclass<ClientGameMode>` or `findclass<ServerGameMode>` returns
+something in round 2, that is the one.
+
+### Round 1, kept for the record
 
 ```
 findclass<GameMode>
@@ -24,28 +60,8 @@ vfc<GameMode>
 fullvf<GameMode>
 ```
 
-Optional, if `findclass<GameMode>` returns nothing useful:
-
-```
-findclass<GameModeBase>
-vfc<GameModeBase>
-fullvf<GameModeBase>
-```
-
-**What I need back:** `zaphkiel_out.txt` (or `zaphkiel_out.c` if `vfc`/`fullvf`
-wrote pseudo-C) — specifically the vtable slot list for the game mode class.
-
-**How I will use it:** Bedrock's destroy path lives on the game mode object, and
-its signature is `startDestroyBlock(BlockPos const&, unsigned char face, bool&)`.
-I will find that slot in the dump, hook it with `pl::memory::hook`, and drive it
-from the aim code I already wrote (`platform/MineAim.h`, `platform/AimRay.h`).
-The face and the hit point come from the raycast; those two pieces are already
-written and tested.
-
-**Why a vtable hook and not a byte signature:** `BlockSourceGetBlock` in
-`memory/Signatures.h` is a 20-instruction pattern, which is fragile. A vtable slot
-is an index, and I can resolve the class from RTTI at runtime — no pattern to break
-when the game updates.
+Result: `GameMode` resolved to typeinfo only, vtable not found. Productive anyway —
+that is how `_sendTryDestroyBlock` was identified.
 
 ---
 
@@ -95,7 +111,7 @@ nothing (iron ore needs a stone pickaxe or it drops air).
 | Double-resolution aim maths | written, tested |
 | Crosshair raycast (face + hit point) | written, tested |
 | `#tunnel <length> [dir]`, 1 wide × 2 high | written, tested |
-| Break hook | **blocked on Request 1** |
+| Break hook | **blocked on Request 2** (address of `_sendTryDestroyBlock`) |
 | Inventory reads | blocked on Request 3 (or a different approach) |
 
 ## Honest limits of what I can check

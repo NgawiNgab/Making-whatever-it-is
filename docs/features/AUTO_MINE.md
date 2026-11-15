@@ -69,8 +69,13 @@ There is no break/destroy signature in `memory/Signatures.h` (`ActorSetRotation`
 `ClientInputUpdateSystemInternal_tick`, three `BlockSource*`). BedrockTools hooks
 its game-mode destroy function; this build has nothing equivalent recorded.
 
-**So this needs a Zaphkiel run to find the destroy-block function for
-1.26.62.1.** That is the one thing blocking real mining.
+A Zaphkiel run has since **confirmed** the function: the mangled name
+`ZN8GameMode20_sendTryDestroyBlockERK8BlockPoshE3$_0` decodes to
+`GameMode::_sendTryDestroyBlock(BlockPos const&, unsigned char)` — position and
+face, which is exactly what the raycast produces. It is non-virtual and `GameMode`
+has no vtable, so it has to be reached by address rather than slot. Getting that
+address is the one remaining blocker; the request is in `ZAPH_QUEUE.md`, findings
+in `ZAPH_FINDINGS.md`.
 
 ## Second gap: inventory is stubbed
 
@@ -96,7 +101,7 @@ player's `PlayerInventory`/container data, which is ordinary component reading.
 
 | Stage | Work | Blocked on |
 |---|---|---|
-| A | **Break hook.** Find the destroy-block function for 1.26.62.1, hook it, apply `ClickLeft` | Zaphkiel signature |
+| A | **Break hook.** Call `GameMode::_sendTryDestroyBlock(BlockPos const&, u8 face)` | its address — Zaphkiel round 2 |
 | B | **Inventory read.** `selectedSlot`/`hotbar`/`countItem`/`selectSlot`; dropped-item `entities()` | Nothing known |
 | C | ~~`#mine` command~~ | **Done** |
 | D | Unloaded-chunk targets: `searchWorld` over the long-distance cache | Nothing known |
