@@ -16,17 +16,22 @@ package("preloader")
     end)
 package_end()
 
--- preloader is Android-only (its install hook is `on_install("android", ...)`), so
--- requiring it unconditionally at root scope makes *every* target in the project
--- fail on a host with "unsupported on linux/x86_64" -- including the host tests,
--- which never touch the SDK. Guarding by platform keeps `xmake build camface_tests`
--- working on a plain Linux box.
--- fmt is also Android-build-only: it exists because pl/Logger.hpp formats through
--- fmt::vformat. The host test target links neither the SDK nor fmt, so requiring
--- either unconditionally would drag cmake+ninja into a build that does not need them.
+-- Both dependencies are Android-build-only, and the guard is load-bearing: a root
+-- scope add_requires is resolved for *every* target, so requiring the Android-only
+-- preloader (its install hook is on_install("android", ...)) makes the host test
+-- target fail with "unsupported on linux/x86_64" -- a target that never touches it.
 if is_plat("android") then
     add_requires("preloader")
-    add_requires("fmt")
+    -- The preloader package links fmt PUBLIC, so its headers are part of the SDK's
+    -- public interface (pl/Logger.hpp includes <fmt/format.h>). But the package's
+    -- install step only exports include/pl, so fmt's headers are not on the include
+    -- path and the build fails with "'fmt/format.h' file not found".
+    --
+    -- The version is pinned to the one preloader itself builds: it FetchContent's
+    -- fmt 11.2.0. Asking for whatever xmake-repo considers latest (12.2.0) would
+    -- put two different fmt versions in one build, where a change in fmt's public
+    -- headers is an ABI break rather than a warning.
+    add_requires("fmt 11.2.0")
 end
 
 -- Guard rails: an Android build without an NDK fails deep inside package
