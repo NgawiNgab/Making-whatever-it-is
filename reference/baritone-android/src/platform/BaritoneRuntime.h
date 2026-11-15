@@ -43,6 +43,9 @@ public:
     // "sugarcane" or "iron_ore"), then path to and break them. `quantity` of 0 keeps
     // going; a positive number stops once that many are collected.
     void startMineFromText(std::string_view filterText, int quantity);
+    // #tunnel <length> [north|south|east|west]: a 1 wide, 2 high corridor from the
+    // player's feet. No direction given means "the way the player is facing".
+    void startTunnelFromText(std::string_view text);
     void setFovCompensation(float degrees);
     void setTurnSensitivity(float sensitivity);
     void setManipulateCamera(bool enabled);
@@ -89,6 +92,13 @@ private:
     std::optional<MineRequest> pendingMine_;
     // Held for one tick so MineProcess::mine() runs against a world snapshot.
     std::optional<MineRequest> pendingMineNextTick_;
+
+    struct TunnelRequest {
+        std::string direction;  // empty = the player's facing
+        int length = 0;
+    };
+    std::optional<TunnelRequest> pendingTunnel_;
+    std::optional<TunnelRequest> pendingTunnelNextTick_;
 };
 
 }  // namespace baritone::platform

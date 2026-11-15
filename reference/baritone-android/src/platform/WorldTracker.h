@@ -11,6 +11,7 @@
 #include "baritone/cache/ChunkPackerQueue.h"
 #include "baritone/utils/BlockPos.h"
 #include "baritone/world/WorldSnapshot.h"
+#include "platform/WorldTrackerScan.h"
 
 namespace sdk {
 class BlockSource;
@@ -54,7 +55,7 @@ public:
     int dimension() const { return dimension_; }
 
     // Stats for #debug
-    std::size_t knownStates() const { return blockIds_.size(); }
+    std::size_t knownStates() const { return scanCache_ ? scanCache_->names() : 0; }
     std::size_t scannedChunks() const { return scannedAt_.size(); }
     double lastChunkScanMs() const { return lastChunkScanMs_; }
     std::size_t pendingPacks() const { return packQueue_.size(); }
@@ -94,7 +95,8 @@ private:
 
     void* region_ = nullptr;
     std::shared_ptr<baritone::WorldSnapshot> snapshot_;
-    std::unordered_map<const void*, baritone::StateId> blockIds_;
+    // Name-keyed, not pointer-keyed: getBlock can repeat a scratch Block*.
+    std::unique_ptr<ScanStateCache> scanCache_;
     std::unordered_map<int64_t, uint64_t> scannedAt_;  // chunk key -> tick
     uint64_t tick_ = 0;
     int dimension_ = -1;

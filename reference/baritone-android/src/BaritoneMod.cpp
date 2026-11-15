@@ -19,6 +19,7 @@ std::mutex gGotoMutex;
 std::string gGotoText;
 std::string gMineBlocksText;
 std::string gMineQuantityText = "0";
+std::string gTunnelText;
 
 void setGotoText(std::string_view text) {
     std::lock_guard lock(gGotoMutex);
@@ -48,6 +49,16 @@ int mineQuantity() {
 std::string mineBlocks() {
     std::lock_guard lock(gGotoMutex);
     return gMineBlocksText;
+}
+
+void setTunnelText(std::string_view text) {
+    std::lock_guard lock(gGotoMutex);
+    gTunnelText = text;
+}
+
+std::string tunnelText() {
+    std::lock_guard lock(gGotoMutex);
+    return gTunnelText;
 }
 
 }  // namespace
@@ -101,6 +112,9 @@ bool BaritoneMod::load() {
         .config("mine_quantity", "Mine quantity (0 = keep mining)", pl::modmenu::ConfigType::Text,
                 "0")
         .config("mine", "Mine", pl::modmenu::ConfigType::Button)
+        .config("tunnel_spec", "Tunnel (length, optional north/south/east/west)",
+                pl::modmenu::ConfigType::Text, "")
+        .config("tunnel", "Tunnel", pl::modmenu::ConfigType::Button)
         .config("test_stop", "Stop", pl::modmenu::ConfigType::Button)
         .onConfigChanged([](std::string_view, std::string_view key, std::string_view value) {
             logger::info("Mod menu config key='{}' value='{}'", key, value);
@@ -108,6 +122,10 @@ bool BaritoneMod::load() {
                 setMineText(value, {});
             } else if (key.ends_with("mine_quantity")) {
                 setMineText({}, value);
+            } else if (key.ends_with("tunnel_spec")) {
+                setTunnelText(value);
+            } else if (key.ends_with("tunnel")) {
+                platform::BaritoneRuntime::get().startTunnelFromText(tunnelText());
             } else if (key.ends_with("mine")) {
                 platform::BaritoneRuntime::get().startMineFromText(mineBlocks(),
                                                                   mineQuantity());

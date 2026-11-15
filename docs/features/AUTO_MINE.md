@@ -3,51 +3,41 @@
 **Goal.** Select a block type (sugarcane, iron ore, anything). The bot finds the
 nearest instance, paths to it, mines it, and repeats. Hands-off.
 
-Status: **nothing has been run in Minecraft. The command is wired and the bot's
-decisions are tested against a fake world; the game-input half is not written at
-all, so this will not mine anything yet.**
+Status: **nothing has been run in Minecraft.** The commands are wired, the aim and
+raycast maths are written, and the bot's decisions are tested against a fake world.
+The step that actually breaks a block is still missing: it needs one vtable slot
+from Zaphkiel (`ZAPH_QUEUE.md`, Request 1). Until that lands this will walk to a
+block and stop.
 
 ## What is wired (compiles, not run in game)
-
-`#mine` is wired end to end in the mod layer:
 
 - `BaritoneRuntime::startMineFromText(blocks, quantity)` parses user input:
   `sugarcane`, `iron_ore`, `64 iron_ore`, `iron_ore,diamond_ore`,
   `minecraft:iron_ore`. A leading number is the quantity; 0 means "keep going".
-- The request is queued and applied at the top of the next tick, *after* the world
+- `BaritoneRuntime::startTunnelFromText(spec)` parses `64`, `64 north`,
+  `north 64`, or nothing (= the way you are facing).
+- Requests are queued and applied at the top of the next tick, **after** the world
   snapshot is published. `MineProcess::mine()` scans the snapshot when it starts,
   so applying it before the snapshot exists would scan nothing.
-- `MineProcess` then does the rest: find nearby matching blocks, build a goal,
-  path to it (breaking whatever is in the way), and pick up drops.
-- Mod menu: `mine_blocks` (text), `mine_quantity` (text), `mine` (button).
-  "Stop" cancels it.
+- Mod menu: `mine_blocks`, `mine_quantity`, `mine`, `tunnel_spec`, `tunnel`, and
+  the existing `test_stop`.
+- `TunnelProcess` (new): a 1 wide, 2 high corridor. Movement alone only clears the
+  block at feet level, so the head block is broken by the process itself.
 
-### What the tests do and do not show
+### Bugs found and fixed while doing this
 
-**The tests do not run Minecraft.** There is no game here, no device, no
-`libminecraftpe.so`. What `./tests/run.sh` runs is:
-
-- a **fake world**: `tests/TestWorld.h` fills a `WorldSnapshot` with stone and a
-  few named blocks. It is a flat box, not a real chunk.
-- a **fake player**: `tests/TestPlayer.h` moves by `speed = 0.215` per tick in the
-  direction of its yaw, plus `y += 0.42` for a jump. That is invented physics, not
-  Bedrock's.
-- the **real** `MineProcess`, `WorldScanner`, pathfinder and `#mine` parser, compiled
-  unmodified from `reference/`.
-
-So the tests prove the *bot's decisions* against a stand-in world. They cannot
-prove what happens in the game.
-
-| Harness | What it actually establishes | What it cannot |
-|---|---|---|
-| `mine_harness` | Given a `WorldSnapshot` containing sugarcane 5 blocks away, `MineProcess` finds it, emits a target rotation, and emits `Input::ClickLeft`. Ends at x=11.02 against the block at 12. | That the game reacts to those clicks, that the block is really there, that reach/rotation match Bedrock |
-| `mine_cases_harness` | Same decision loop for ore buried at x=15 — the pathfinder chose to break through stone to get there. | Same as above |
-| `mine_command_harness` | `startMineFromText` parses input correctly and rejects junk. This part is close to the real thing, since parsing has no world dependency. | Anything about acting in the world |
-
-Useful, but narrower than "it works". The strongest statement supported is: **the
-routing from `#mine` to `MineProcess`, and `MineProcess`'s decisions in a
-synthetic world, are correct.** Everything downstream of `MovementState` is
-untested and, per the next section, unwritten.
+1. **Mined blocks stayed in the snapshot.** `WorldTracker` cached block state ids
+   keyed on the `Block*` that `BlockSource::getBlock` returned. That pointer can be
+   reused for different blocks, so a mined ore stayed registered as ore forever and
+   the bot would path back to a hole. Now keyed by block *name*, in
+   `platform/WorldTrackerScan.{h,cpp}`, with a test.
+2. **The camera pitch was never written.** `InputOverride::writeRotation` sets
+   `lookDelta.x = 0` unconditionally, so only yaw was applied. Aiming at a block
+   needs pitch; `platform/MineAim.h` now produces both axes.
+3. **Raycast reported the exit face.** The first version returned the far side of
+   the block, which would have put clicks on the wrong face. Fixed and tested; the
+   `+Z` face, exact 0.5-block distance, and nearest-block occlusion are all
+   asserted now.
 
 ## What still does not work — the blocker
 

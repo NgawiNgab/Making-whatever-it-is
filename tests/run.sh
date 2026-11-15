@@ -34,6 +34,28 @@ mkdir -p "$OBJ" "$MODOBJ" "$ZIG_GLOBAL_CACHE_DIR" "$ZIG_LOCAL_CACHE_DIR"
 # ---------------------------------------------------------------- core objects
 echo "== compiling core =="
 find "$SRC/baritone" -name '*.cpp' | sort > "$OUT/srcs.txt"
+
+# Objects are reused, which is fine for speed but has bitten twice: a header edit
+# (Baritone.h gaining a member) left stale objects that linked and then crashed. A
+# cheap fingerprint of every header catches that without a full dependency walk.
+FINGERPRINT="$(find "$SRC" \( -name '*.h' -o -name '*.hpp' \) | sort | xargs cat | cksum)"
+if [ -f "$OUT/headers.fingerprint" ] && \
+   [ "$(cat "$OUT/headers.fingerprint")" != "$FINGERPRINT" ]; then
+    echo "  headers changed, rebuilding"
+    rm -f "$OBJ"/*.o
+fi
+
+# A stale object once linked cleanly and segfaulted at runtime (a process was added to
+# Baritone's member list; an old Baritone.o still had the smaller layout). Cheap
+# per-object mtime/dependency staleness cannot see that, because the header is older
+# than the object. So: rebuilding is the default, and reusing objects is opt-in.
+if [ "${INCREMENTAL:-0}" != "1" ]; then
+    rm -f "$OBJ"/*.o
+else
+    echo "  (incremental: reusing objects in $OBJ)"
+fi
+echo "$FINGERPRINT" > "$OUT/headers.fingerprint"
+
 cat "$OUT/srcs.txt" | xargs -P "$(nproc)" -I{} sh -c '
     n=$(echo "{}" | sed "s|.*/baritone/||; s|/|_|g; s|\.cpp$|.o|")
     if [ ! -f "'"$OBJ"'/$n" ] || [ "{}" -nt "'"$OBJ"'/$n" ]; then
@@ -51,8 +73,8 @@ echo "core: $(wc -l < "$OUT/srcs.txt") files"
 echo "== compiling mod layer =="
 MODS=(platform/BaritoneRuntime.cpp platform/GamePlayerContext.cpp platform/InputOverride.cpp
       platform/Log.cpp platform/Paths.cpp platform/PathVisualizer.cpp
-      platform/BlockClassifier.cpp platform/WorldTracker.cpp sdk/Game.cpp sdk/Memory.cpp
-      sdk/Nbt.cpp)
+      platform/BlockClassifier.cpp platform/WorldTracker.cpp platform/WorldTrackerScan.cpp
+      sdk/Game.cpp sdk/Memory.cpp sdk/Nbt.cpp)
 MODFLAGS=(-std=c++23 -O1 -Wno-date-time -Wno-unused-result -DFMT_HEADER_ONLY
           -I"$SRC" -I"$ROOT" -I"$ROOT/tests/stubs"
           -I"$ROOT/third_party/entt/src" -I"$ROOT/third_party/fmt/include"

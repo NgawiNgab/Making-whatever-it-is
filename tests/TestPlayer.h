@@ -5,6 +5,7 @@
 // run and measured on a desktop instead of guessed at on a phone.
 
 #include <cmath>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,9 @@ public:
     void setPosition(const baritone::Vec3d& p) { pos_ = p; x_ = p.x; y_ = p.y; z_ = p.z; }
     void setRotation(const baritone::Rotation& r) { rot_ = r; }
     void setGroundY(double y) { groundY_ = y; y_ = y; }
+    // Solid test: blocks the player cannot walk through. Without this the fake player
+    // strolls through stone and any "it tunnels" test passes for the wrong reason.
+    void setPassable(std::function<bool(int, int, int)> f) { passable_ = std::move(f); }
 
     // Stand in for the game: take the controls the bot produced and move this player
     // the way Bedrock would. Without this the bot aims but never arrives.
@@ -36,8 +40,13 @@ public:
         // Bedrock: forward is -Z rotated by yaw
         const double dx = (-std::sin(yawRad) * fwd + std::cos(yawRad) * strafe) * speed;
         const double dz = (std::cos(yawRad) * fwd + std::sin(yawRad) * strafe) * speed;
-        x_ += dx;
-        z_ += dz;
+
+        // Move each axis separately and refuse a step that would put the player's
+        // 0.6-wide box inside a solid block. Crude, but it makes "cannot walk through
+        // stone" true, which is the property under test.
+        const double radius = 0.3;
+        if (canStand(x_ + dx, z_, radius)) x_ += dx;
+        if (canStand(x_, z_ + dz, radius)) z_ += dz;
 
         if (c.input(baritone::Input::Jump)) y_ += 0.42;
         if (y_ > groundY_) {
@@ -90,11 +99,28 @@ public:
     std::vector<baritone::BlockPos> breakRequests;
 
 private:
+    bool canStand(double nx, double nz, double radius) const {
+        if (!passable_) return true;
+        const int fy = static_cast<int>(std::floor(y_));
+        const int hy = static_cast<int>(std::floor(y_ + 1.62));
+        for (int y : {fy, hy}) {
+            for (double cx : {nx - radius, nx + radius}) {
+                for (double cz : {nz - radius, nz + radius}) {
+                    if (!passable_(static_cast<int>(std::floor(cx)), y,
+                                   static_cast<int>(std::floor(cz))))
+                        return false;
+                }
+            }
+        }
+        return true;
+    }
+
     baritone::Vec3d pos_{0, 0, 0};
     baritone::Rotation rot_{};
     int slot_ = 0;
     double x_ = 0, y_ = 0, z_ = 0;
     double groundY_ = 0;
+    std::function<bool(int, int, int)> passable_;
 };
 
 }  // namespace baritone_test

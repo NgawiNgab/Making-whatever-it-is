@@ -17,6 +17,7 @@ Baritone::Baritone(PlayerContext& player, Notify notify)
       customGoal_(*this),
       getToBlock_(*this),
       mine_(*this),
+      tunnel_(*this),
       follow_(*this),
       explore_(*this),
       farm_(*this),
@@ -46,6 +47,7 @@ Baritone::Baritone(PlayerContext& player, Notify notify)
     control_.registerProcess(&customGoal_);
     control_.registerProcess(&getToBlock_);
     control_.registerProcess(&mine_);
+    control_.registerProcess(&tunnel_);
     control_.registerProcess(&follow_);
     control_.registerProcess(&explore_);
     control_.registerProcess(&farm_);

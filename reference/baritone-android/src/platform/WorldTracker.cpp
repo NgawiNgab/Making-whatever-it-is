@@ -49,7 +49,7 @@ void WorldTracker::reset() {
     pending_.reset();
     dimension_ = -1;
     region_ = nullptr;
-    // Block* pointers stay valid for the whole game session, so blockIds_ is kept.
+    // Block names do not change between worlds, so the name cache is kept.
 }
 
 void WorldTracker::setWorld(const std::string& folder) {
@@ -136,21 +136,24 @@ void WorldTracker::setDimension(int dimension, int minY, int maxY) {
 
 StateId WorldTracker::idOf(const void* block) {
     if (!block) return baritone::kAir;
-    auto it = blockIds_.find(block);
-    if (it != blockIds_.end()) return it->second;
 
-    sdk::Block view(block);
-    std::string name = view.name();
-    if (name.empty()) name = view.legacyName();
-    if (name.empty()) {
+    // Keyed by block *name*, not by the returned pointer. BlockSource::getBlock can
+    // return the same scratch Block* for different blocks, so a pointer-keyed cache
+    // reports mined blocks as still being there (see WorldTrackerScan.h).
+    if (!scanCache_) {
+        scanCache_ = std::make_unique<ScanStateCache>();
+        scanCache_->setReader([](const void* raw) {
+            sdk::Block view(raw);
+            std::string name = view.name();
+            if (name.empty()) name = view.legacyName();
+            return name;
+        });
+    }
+    const StateId id = scanCache_->idOf(block);
+    if (id == baritone::kAir) {
         if (unknownBlocks_++ < 8)
             logger::warn("unreadable block name at {} (name path may be wrong)", block);
-        return baritone::kAir;
     }
-
-    auto props = classifyBlock(name, nullptr);
-    StateId id = baritone::BlockRegistry::get().add(std::move(props));
-    blockIds_.emplace(block, id);
     return id;
 }
 
@@ -158,8 +161,6 @@ bool WorldTracker::continueScan(PendingScan& scan, Clock::time_point deadline) {
     const auto sliceStart = Clock::now();
     const sdk::BlockSource source(region_);
     sdk::BlockPos pos;
-    const void* lastBlock = nullptr;
-    StateId lastId = baritone::kAir;
     bool done = true;
     for (int c = scan.nextColumn; c < 256; ++c) {
         // 4 columns (~1.5k lookups) between clock reads keeps the overrun tiny
@@ -173,12 +174,9 @@ bool WorldTracker::continueScan(PendingScan& scan, Clock::time_point deadline) {
         pos.z = (scan.cz << 4) | lz;
         for (int y = minY_; y < maxY_; ++y) {
             pos.y = y;
-            const void* block = source.getBlock(pos);
-            if (block != lastBlock) {  // long runs of the same block (air, stone)
-                lastBlock = block;
-                lastId = idOf(block);
-            }
-            if (lastId != baritone::kAir) scan.chunk->set(lx, y, lz, lastId);
+            // No "same pointer means same block" shortcut: it is what made mined
+            // blocks linger in the snapshot. idOf() caches by name instead.
+            scan.chunk->set(lx, y, lz, idOf(source.getBlock(pos)));
         }
     }
     scan.elapsedMs += std::chrono::duration<double, std::milli>(Clock::now() - sliceStart).count();

@@ -13,6 +13,7 @@
 #include "baritone/process/FollowProcess.h"
 #include "baritone/process/GetToBlockProcess.h"
 #include "baritone/process/MineProcess.h"
+#include "baritone/process/TunnelProcess.h"
 #include "baritone/process/PathingControlManager.h"
 #include "baritone/process/PauseProcess.h"
 #include "baritone/process/SurvivalProcess.h"
@@ -60,6 +61,7 @@ public:
     CustomGoalProcess& customGoal() { return customGoal_; }
     GetToBlockProcess& getToBlock() { return getToBlock_; }
     MineProcess& mine() { return mine_; }
+    TunnelProcess& tunnel() { return tunnel_; }
     FollowProcess& follow() { return follow_; }
     ExploreProcess& explore() { return explore_; }
     FarmProcess& farm() { return farm_; }
@@ -111,6 +113,7 @@ private:
     CustomGoalProcess customGoal_;
     GetToBlockProcess getToBlock_;
     MineProcess mine_;
+    TunnelProcess tunnel_;
     FollowProcess follow_;
     ExploreProcess explore_;
     FarmProcess farm_;

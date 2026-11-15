@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <bitset>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <format>
@@ -418,6 +419,37 @@ void BaritoneRuntime::startMineFromText(std::string_view filterText, int quantit
                  std::max(parsedQuantity, 0));
 }
 
+void BaritoneRuntime::startTunnelFromText(std::string_view text) {
+    // "#tunnel 64" / "#tunnel 64 north" / "#tunnel" (as far as it goes, this way)
+    std::istringstream stream{std::string(text)};
+    std::vector<std::string> tokens;
+    for (std::string token; stream >> token;) {
+        for (char& c : token) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        tokens.push_back(std::move(token));
+    }
+
+    TunnelRequest request;
+    for (const std::string& token : tokens) {
+        if (token == "north" || token == "south" || token == "east" || token == "west") {
+            request.direction = token;
+            continue;
+        }
+        bool digits = !token.empty() &&
+                      std::ranges::all_of(token, [](char c) { return c >= '0' && c <= '9'; });
+        if (digits && token.size() <= 6) request.length = std::stoi(token);
+    }
+
+    {
+        std::lock_guard lock(goalMutex_);
+        pendingTunnel_ = std::move(request);
+        pendingGoal_.reset();
+        pendingMine_.reset();
+    }
+    logger::info("TUNNEL queued direction='{}' length={}",
+                 tokens.empty() ? "" : (request.direction.empty() ? "facing" : request.direction),
+                 request.length);
+}
+
 void BaritoneRuntime::setFovCompensation(float degrees) {
     if (!std::isfinite(degrees)) return;
     const float clamped = std::clamp(degrees, -60.0f, 60.0f);
@@ -449,7 +481,8 @@ void BaritoneRuntime::beforeGameTick(void* registry) {
     const bool active = baritone_ && (baritone_->pathing().isPathing() ||
                                       baritone_->pathing().isCalculating() ||
                                       baritone_->customGoal().goal() != nullptr ||
-                                      baritone_->mine().isActive());
+                                      baritone_->mine().isActive() ||
+                                      baritone_->tunnel().isActive());
     input_->before(registry, lastControls_, active,
                    manipulateCamera_.load(std::memory_order_relaxed),
                    turnSensitivity_.load(std::memory_order_relaxed));
@@ -609,6 +642,14 @@ void BaritoneRuntime::afterGameTick(void* registry) {
         pendingMineNextTick_ = std::move(mineRequest);
     }
 
+    std::optional<TunnelRequest> tunnelRequest;
+    {
+        std::lock_guard lock(goalMutex_);
+        tunnelRequest = std::move(pendingTunnel_);
+        pendingTunnel_.reset();
+    }
+    if (tunnelRequest) pendingTunnelNextTick_ = std::move(tunnelRequest);
+
     auto& tracker = WorldTracker::get();
     const int dimension = 0;
     const baritone::Vec3d pos = context_->position();
@@ -617,6 +658,25 @@ void BaritoneRuntime::afterGameTick(void* registry) {
 
     baritone_->tick(snapshot);
     lastControls_ = baritone_->controls();
+
+    if (pendingTunnelNextTick_) {
+        TunnelRequest request = std::move(*pendingTunnelNextTick_);
+        pendingTunnelNextTick_.reset();
+        baritone::Direction dir = baritone::Direction::North;
+        if (request.direction == "south") {
+            dir = baritone::Direction::South;
+        } else if (request.direction == "east") {
+            dir = baritone::Direction::East;
+        } else if (request.direction == "west") {
+            dir = baritone::Direction::West;
+        } else if (request.direction.empty()) {
+            // No direction given: take the way the player is already looking.
+            const float yaw = context_->rotation().yaw;
+            dir = baritone::nearestHorizontal(yaw);
+        }
+        baritone_->tunnel().start(dir, request.length);
+        logger::info("TUNNEL started length={}", request.length);
+    }
 
     if (pendingMineNextTick_ && baritone_->world()) {
         MineRequest request = std::move(*pendingMineNextTick_);
