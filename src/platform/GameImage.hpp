@@ -8,8 +8,12 @@
 
 namespace camface::platform {
 
-// Locates the already-loaded game library through the engine and exposes its
-// executable segment as an ImageSource.
+// Locates the already-loaded game library and exposes its first executable segment
+// as an ImageSource.
+//
+// Discovery uses /proc/self/maps, matching the SDK's own getModuleInfo
+// (preloader src/pl/memory/Signature.cpp). dlinfo(RTLD_DI_LINKMAP) is NOT usable:
+// it is a glibc extension and Android's <dlfcn.h> does not define it.
 //
 // IMPORTANT: `read()` takes a **file-image offset (RVA)**, not a runtime address.
 // That is deliberate — every address in evidence/ is an RVA, and keeping the

@@ -81,7 +81,14 @@ checked=0
 for file in src/main.cpp src/core/*.cpp src/platform/*.cpp src/game/*.cpp src/features/*.cpp; do
     [ -e "$file" ] || continue
     checked=$((checked + 1))
-    if output=$("$cxx" -std=c++20 -fsyntax-only -I"$stub" -I"$sdk" -Iinclude -Isrc "$file" 2>&1); then
+    # -D poisoning reproduces Android's <dlfcn.h>, which declares neither dlinfo nor
+    # RTLD_DI_LINKMAP (both glibc extensions). Shim headers cannot do this: glibc's
+    # <bits/dlfcn.h> is force-included and beats any -I stub. Defining the name to an
+    # impossible token turns a glibc-only call into a host compile error -- the check
+    # that was missing when RTLD_DI_LINKMAP reached CI.
+    if output=$("$cxx" -std=c++20 -fsyntax-only \
+            -DRTLD_DI_LINKMAP=CAMFACE_NOT_ON_ANDROID \
+            -I"$stub" -I"$sdk" -Iinclude -Isrc "$file" 2>&1); then
         printf '  ok    %s\n' "$file"
     else
         printf '  FAIL  %s\n' "$file"
