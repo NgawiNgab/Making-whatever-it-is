@@ -22,16 +22,10 @@ package_end()
 -- target fail with "unsupported on linux/x86_64" -- a target that never touches it.
 if is_plat("android") then
     add_requires("preloader")
-    -- The preloader package links fmt PUBLIC, so its headers are part of the SDK's
-    -- public interface (pl/Logger.hpp includes <fmt/format.h>). But the package's
-    -- install step only exports include/pl, so fmt's headers are not on the include
-    -- path and the build fails with "'fmt/format.h' file not found".
-    --
-    -- The version is pinned to the one preloader itself builds: it FetchContent's
-    -- fmt 11.2.0. Asking for whatever xmake-repo considers latest (12.2.0) would
-    -- put two different fmt versions in one build, where a change in fmt's public
-    -- headers is an ABI break rather than a warning.
-    add_requires("fmt 11.2.0")
+    -- pl/Logger.hpp includes <fmt/format.h>, so fmt is part of the SDK's public
+    -- interface even though the preloader package only exports include/pl. Unpinned,
+    -- exactly as the reference requires it.
+    add_requires("fmt")
 end
 
 -- Guard rails: an Android build without an NDK fails deep inside package
@@ -47,26 +41,16 @@ if is_plat("android") and not os.getenv("ANDROID_NDK_HOME") and not os.getenv("A
     print("      build will fail to resolve package(preloader) until it is set.")
 end
 
--- The version lives in include/camface/Version.hpp, because that is what
--- scripts/package_levipack.py parses into the manifest. Reading it here avoids a
--- second copy that could drift and ship a .so versioned differently from its
--- manifest. (The reference hardcodes it in both places.)
-local function read_version()
-    local fallback = "0.0.0"
-    local header = path.join(os.projectdir(), "include", "camface", "Version.hpp")
-    -- The xmake script sandbox exposes neither `io` nor every `os.iorun*` helper, so
-    -- this uses the plain command substitution form and falls back silently.
-    local text = os.iorun and os.iorun("cat " .. header) or nil
-    if not text then return fallback end
-    local value = text:match('inline%s+constexpr%s+std::string_view%s+Version%s*=%s*"([^"]+)"')
-    return value or fallback
-end
+-- Deliberately no set_version(): on a shared library xmake then emits
+-- libCameraFacing.so.0.1.0 plus symlinks, and scripts/package_levipack.py rejects any
+-- library whose filename is not libCameraFacing.so. The version lives in
+-- include/camface/Version.hpp, which the packager parses into the manifest; the
+-- reference does not call set_version either.
 
 target("CameraFacing")
     set_kind("shared")
     set_languages("c++20")
     set_strip("all")
-    set_version(read_version())
 
     add_files("src/main.cpp")
     add_files("src/core/*.cpp", "src/platform/*.cpp", "src/game/*.cpp", "src/features/*.cpp")
@@ -75,8 +59,12 @@ target("CameraFacing")
     add_includedirs("include", {public = true})
     add_includedirs("src")
 
+    -- fmt belongs here, not only in add_requires: a root-scope add_requires just
+    -- resolves the package, while add_packages is what puts its include dirs on the
+    -- compile line and links it. Referencing it only in add_requires is what produced
+    -- "'fmt/format.h' file not found" for six CI runs.
     if is_plat("android") then
-        add_packages("preloader")
+        add_packages("preloader", "fmt")
     end
 
     if is_plat("android") then
