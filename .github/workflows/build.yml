@@ -97,8 +97,38 @@ jobs:
           cat diag.txt >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Show artifact
-        run: find build/android -name '*.levipack' -o -name '*.so' | sort
+      # Verifies the package is real, and publishes the facts as an annotation:
+      # the artifact itself lives in blob storage that is not reachable from every
+      # environment, so the manifest has to be readable without downloading it.
+      - name: Verify artifact
+        run: |
+          set -e
+          pack=$(find build/android -name '*.levipack' | head -1)
+          so=$(find build/android -name 'libCameraFacing.so' | head -1)
+          echo "pack: $pack"
+          echo "so:   $so"
+          ls -la "$pack" "$so"
+          python3 - "$pack" "$so" <<'PYEOF'
+          import json, sys, zipfile, hashlib
+          pack, so = sys.argv[1], sys.argv[2]
+          z = zipfile.ZipFile(pack)
+          names = z.namelist()
+          manifest = json.loads(z.read("manifest.json"))
+          lib = z.read(manifest["entry"])
+          print("entries:", names)
+          print("manifest:", json.dumps(manifest, indent=2))
+          print("so bytes:", len(lib), "sha256:", hashlib.sha256(lib).hexdigest()[:16])
+          # ELF header check: a real arm64 shared object, not an empty file.
+          assert lib[:4] == b"\x7fELF", "entry is not an ELF file"
+          assert lib[18:20] == b"\xb7\x00", f"not aarch64 (e_machine={lib[18:20].hex()})"
+          machine = {0x03: "x86", 0x28: "arm", 0xb7: "aarch64"}.get(lib[18], hex(lib[18]))
+          print("ELF machine:", machine, "type:", {2:"EXEC",3:"DYN"}.get(lib[16], lib[16]))
+          # The .so inside the pack must be byte-identical to the built one.
+          with open(so, "rb") as f:
+              assert f.read() == lib, "packaged library differs from the built library"
+          print("packaged library matches the build output")
+          print(f"::notice title=levipack::{manifest['name']} v{manifest['version']} | entry={manifest['entry']} | {len(lib)} bytes | {machine}")
+          PYEOF
 
       - uses: actions/upload-artifact@v4
         with:
