@@ -75,8 +75,16 @@ jobs:
         if: failure()
         run: |
           strip() { sed 's/\x1b\[[0-9;]*m//g' ; }
-          { tail -40 configure.log 2>/dev/null; echo "=== BUILD ==="; tail -40 build.log 2>/dev/null; } | strip > diag.txt || true
-          echo "Android build failed — diagnostics:" >> diag.txt
+          # Compiler errors are the interesting lines; a bare tail is mostly progress
+          # noise ("compiling.release ..."). Grep for error context, keep the tail as
+          # a fallback when nothing matches.
+          {
+            echo "=== ERRORS ==="
+            grep -nE "error:|Error|error|fatal|undefined reference|cannot|No such file" build.log 2>/dev/null | head -25
+            echo "=== BUILD TAIL ==="
+            tail -12 build.log 2>/dev/null
+          } | strip > diag.txt || true
+          echo "=== end ===" >> diag.txt
           while IFS= read -r line; do
             printf '::warning title=ci::%s\n' "${line//\%/%25}"
           done < diag.txt
