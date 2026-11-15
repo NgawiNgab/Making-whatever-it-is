@@ -67,8 +67,10 @@ jobs:
           set -o pipefail
           xmake f -y -p android -a arm64-v8a -m release --ndk=${{ steps.ndk.outputs.ndk-path }} 2>&1 | tee configure.log
           xmake -y 2>&1 | tee build.log
-          # A failing first compile hides the command line, so ask xmake for it.
-          xmake show -t CameraFacing --verbose 2>&1 | tee -a build.log || true
+          # A failing first compile hides the command line, so ask xmake for the
+          # resolved packages and compile flags directly.
+          { echo "=== REQUIREINFO ==="; xmake require --info '*' 2>&1 | head -40;
+            echo "=== TARGETINFO ==="; xmake show -t CameraFacing 2>&1 | head -40; } | tee -a build.log || true
 
       # The job log lives in blob storage and the step summary is not exposed by the
       # API, but check-run *annotations* are. Emitting the failure as a warning
