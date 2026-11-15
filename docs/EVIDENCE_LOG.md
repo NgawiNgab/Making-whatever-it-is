@@ -3,20 +3,26 @@
 Classifications: **CONFIRMED** / **INFERRED** / **HYPOTHESIS** / **UNKNOWN**
 (project instruction §4). No finding enters this log without a source.
 
-## Target binding — the blocking unknown
+## Target binding
 
-Both reference projects are pinned to *other* builds than the one declared by our
-references, and we do not yet have a build identity for the user's device:
+Target fixed by the user on 2026-11-15: **MCPE 1.26.62, arm64-v8a** — the same
+build as their other native-mod projects.
 
 | Project | Declared / observed target | Source |
 |---|---|---|
 | BedrockTools (reference) | `1.26.6X.X` (band) | `levimod.json` |
-| User's earlier projects (Seed-Taker) | `1.26.62`, `libminecraftpe.so` 342,231,392 B, text `0x0-0x13686ff0`, 7 segments | Seed-Taker `evidence/ST-001/zaphkiel_out.txt` header |
-| **This project (target)** | **UNKNOWN — `T-P1` must fill this in** | — |
+| **This project (target)** | **1.26.62** — user-stated 2026-11-15 | `docs/PROJECT_CHARTER.md` §2 |
+| User's other project (Seed-Taker) | `1.26.62`, `libminecraftpe.so` 342,231,392 B, text `0x0-0x13686ff0`, 7 segments | its `evidence/ST-001/zaphkiel_out.txt` header; CRASH-001 records the device |
 
-Every offset/signature in this repository is therefore **UNKNOWN for our target**
-until it is re-verified against the user's exact binary. This is not caution for
-its own sake: the same reference rewrites ~66% of its signature table (100 of 152 rows) between two
+Targeting the same build as the user's existing work makes some of their prior
+evidence **potentially** reusable. It does **not** make it verified: evidence is
+bound to a specific library instance, which must be confirmed identical (size +
+segment table + a hash if obtainable) before any address or offset crosses over
+(`F-024`). Prior findings are not adopted by default.
+
+Every offset/signature in this repository is **UNKNOWN for our target** until
+re-verified against the user's exact binary. This is not caution for its own sake:
+the reference rewrites ~66% of its signature table (100 of 152 rows) between two
 adjacent builds (§F-008).
 
 ## Reference-derived facts
@@ -51,11 +57,46 @@ adjacent builds (§F-008).
 
 | ID | Question | Class | Next step |
 |----|----------|-------|-----------|
-| Q-001 | What exact build is the user running (`build` string, `libminecraftpe.so` size, segment table, text range)? | UNKNOWN | `T-P1` |
+| Q-001 | ~~What exact build are we on?~~ **ANSWERED 2026-11-15: 1.26.62 arm64** (user-stated). Library instance identity still open — needs size + segment table for the user's exact device | INFERRED (user statement; not yet binary-verified) | `T-P1` header confirms the instance |
 | Q-002 | Is `libminecraftpe.so`'s RTTI/`.dynsym` reachable in the user's mapping (needed for the D1 route)? | UNKNOWN | `T-P1` (`findclass<>` + `dynsym` presence) |
 | Q-003 | Does a generated signature survive round-trip: `sig<>` returns exactly 1 match at the same function? | UNKNOWN | `T-P2`/`T-P3` |
 | Q-004 | Which single function is a safe "is the game alive and is this build ours" probe? | UNKNOWN | `T-P1` candidate selection → `T-P2` verification |
-| Q-005 | What does the user actually want built (feature spec)? | UNKNOWN | Awaiting user. See `docs/PROJECT_CHARTER.md` §1 |
+| Q-005 | ~~What should be built?~~ **ANSWERED 2026-11-15: a feature mod** (user chose). Which *specific* Tier-0 features ship first is still open | CONFIRMED (as requirement) | `docs/SPEC.md` §7 |
+
+## Platform capabilities we build on (no game facts)
+
+**F-024 — The launcher surface carries a complete HUD/UI toolkit. CONFIRMED.**
+`pl::modmenu` exposes `registerModule` (typed `ConfigEntry` set: toggle/slider/
+radio/color/keybind/text/button), `submitDrawCommands` with
+`DrawCommandType {Text, Rect, Line, RectFilled, CircleFilled, TriangleFilled,
+Image}`, `submitHudEditorElements` + `HudEditorElement` (per-element position keys,
+snapping, grid), `registerFont`, `registerImage`, `registerButton` (+
+`ButtonBehavior`, `registerButton`/`ButtonEvent`), `getHudSurfaceSize`
+(`preloader-android/include/pl/ModMenu.hpp`: `HudEditorElement` 94-114, `ModuleInfo` 131-147, `ButtonInfo` 151-177, `DrawCommand` 179-194, entry points 197-246). `pl::input` adds touch/key/
+mouse/text callbacks (`include/pl/Input.hpp`).
+Consequence, and it shapes the whole plan: **Tier-0 features (HUD/UI/input) need
+no game-binary facts at all.** Only game *state* does. See `docs/SPEC.md` §2.
+
+**F-025 — Font/image resources ship inside the `.levipack`. CONFIRMED.**
+The packager writes `manifest.json`, the library, `icon.png`, and
+`resources/minecraft.ttf` (`BedrockTools/scripts/package_levipack.py:33,58-62`);
+the reference registers it with `pl::modmenu::registerFont("minecraft", font)`
+(`src/modules/hud/debugmenu.cpp:293`).
+
+**F-026 — Hook patch width can exceed the target function and corrupt its
+neighbour. CONFIRMED (runtime crash on 1.26.62).**
+User's tombstone on this build: SIGILL `ILL_ILLOPC`, crash at lib+`0x10b1da10`,
+caused by an 8-byte getter hook whose ≥12-byte inline patch destroyed the
+adjacent function `0x10b1da10`, later called by a ctor and load-bearing. Source:
+Seed-Taker `evidence/CRASH-001/README.md` (+ `tombstone.txt`) and its `F-073`.
+Same run proved the surrounding machinery worked (slide + body-verify + detour +
+snapshot all functioned before the crash) — the failure was patch width, not
+resolution. → requirements HS-1..HS-4 in `docs/SPEC.md` §5.
+
+**F-027 — User's device/runtime context on this build. CONFIRMED (their evidence).**
+Samsung SM-A566B, Android 17 (API 37), arm64, non-rooted, LeviLauncher as the host
+process. Source: Seed-Taker `evidence/CRASH-001/README.md`. Relevant because
+non-rooted + launcher-hosted is exactly the constraint set this project targets.
 
 ## Investigations
 

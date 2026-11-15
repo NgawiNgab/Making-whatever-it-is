@@ -1,61 +1,51 @@
 # Making-whatever-it-is
 
-Research and implementation groundwork for **Minecraft Bedrock native modding**
-(Android, `arm64-v8a`, LeviLauncher/preloader), built under a strict
-reference-and-evidence discipline.
+A **feature mod** for **Minecraft Bedrock 1.26.62 on Android `arm64-v8a`**
+(LeviLauncher/preloader), built under a strict reference-and-evidence discipline.
 
-This repository is currently at the **evidence-gathering** stage: the references
-have been inspected and measured, the cross-version strategy is written down, and
-the first reverse-engineering investigation is specified. There is no mod source
-yet, on purpose — two open decisions (below) determine its shape, and writing
-game-facing code before them would be guesswork.
+Status: **design complete, no code yet.** The target and product are decided, the
+architecture is derived from measured properties of the references, and the first
+Zaphkiel investigation is written and queued. Implementation order is in
+[`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
 
-## Start here
+## Documents
 
 | Document | What it holds |
 |---|---|
-| [`docs/PROJECT_CHARTER.md`](docs/PROJECT_CHARTER.md) | The two open decisions, the ten settled architecture decisions, scope |
-| [`docs/REFERENCE_FINDINGS.md`](docs/REFERENCE_FINDINGS.md) | What BedrockTools and Zaphkiel actually are — every claim cited to path + line |
-| [`docs/CROSS_VERSION.md`](docs/CROSS_VERSION.md) | How the project is built so a game update is a *data* change |
+| [`docs/SPEC.md`](docs/SPEC.md) | What the mod does: requirements, feature tiers, hook-safety rules |
+| [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | Phases 0–4, exit criteria, what each phase needs from the user |
+| [`docs/CROSS_VERSION.md`](docs/CROSS_VERSION.md) | How a game update becomes a *data* change, not a rewrite |
+| [`docs/REFERENCE_FINDINGS.md`](docs/REFERENCE_FINDINGS.md) | BedrockTools + Zaphkiel, every claim cited to path and line |
 | [`docs/EVIDENCE_LOG.md`](docs/EVIDENCE_LOG.md) | Classified knowledge: CONFIRMED / INFERRED / HYPOTHESIS / UNKNOWN |
-| [`docs/INVESTIGATIONS.md`](docs/INVESTIGATIONS.md) | Zaphkiel investigation requests, with decision criteria |
+| [`docs/INVESTIGATIONS.md`](docs/INVESTIGATIONS.md) | Zaphkiel requests with exact commands and decision criteria |
+| [`docs/PROJECT_CHARTER.md`](docs/PROJECT_CHARTER.md) | The two decisions, the ten settled architecture rules, scope |
 
-## The short version of what the research found
+## The three findings that shape the design
 
-BedrockTools is a good structural reference and a poor model for durability:
+1. **The reference is single-build by construction.** BedrockTools has no version
+   dispatch anywhere; on its own `26.52 → 26.60` support commit, **100 of 152
+   signature rows** and **47 of 218 offset constants** changed. So version-coupled
+   facts here live in per-build data files, checked at runtime, never in `src/`.
+2. **Resolution must prove itself.** The reference takes the *first* signature
+   match, has no uniqueness check, reports success if *any* row resolved, and
+   reads fields/vtable slots through unchecked dereferences. Here a signature must
+   be unique, land on the function it claims, and pass a structural self-check —
+   otherwise the feature that needed it is disabled with a stated reason.
+3. **The launcher already gives us the whole UI.** `pl::modmenu` provides typed
+   module config, text/rect/line/circle/image drawing, a drag-and-drop HUD editor,
+   fonts, images and on-screen buttons. **Tier-0 features (HUD/UI/input) therefore
+   need no game-binary facts at all** — which is why this project can ship
+   something real before any reverse engineering.
 
-- It is **single-build by construction** — no version dispatch anywhere. A game
-  update rewrites its tables: on its own `26.52 → 26.60` support commit,
-  **100 of 152 signature rows** and **47 of 218 offset constants** changed.
-- Its resolution is **first-match with no uniqueness check**, duplicates resolve
-  silently to whichever match the scanner reaches first, and `resolveAll` reports
-  success if *any* row resolved.
-- Its field/vtable accessors are **unchecked dereferences**; hooks install with
-  their return values discarded.
+## Environment reality
 
-Zaphkiel is a user-operated, docs-only tool: it cannot be linked or invoked by
-this repository, and its addresses are ASLR-slid live VAs that do not survive a
-run. Its signature generator does emit a format the runtime directly accepts,
-which is the one confirmed seam between the two references.
+No line of this project has been compiled or run. This workspace has no Android
+NDK, no xmake, and no target device. Build and runtime results will be reported
+only from actual logs — from CI for the build, and from your device for anything
+that touches the game.
 
-So this project keeps the reference's *structure* and replaces its *durability*:
-version-coupled facts become per-build data files; resolution must prove
-uniqueness and identity; features gate on the facts they declare and fail
-visibly. The reasoning and the measurements are in
-[`docs/CROSS_VERSION.md`](docs/CROSS_VERSION.md).
+## Next step
 
-## Waiting on two answers
-
-1. **Which build?** A concrete `libminecraftpe.so` build string (or confirmation
-   to target the same build as your other projects). Everything version-specific
-   is blocked on this — `Q-001`, investigation `T-P1`.
-2. **Which product?** A feature mod, a reusable toolkit/SDK layer, or a
-   single-purpose tool. Structural consequences are laid out in
-   [`docs/PROJECT_CHARTER.md`](docs/PROJECT_CHARTER.md) §1.
-
-## Status of everything buildable
-
-No source, no build, no tests yet. Nothing in this repository has been compiled
-or run against a game binary — the environment here has no Android NDK, no
-xmake, and no target device, and any claim otherwise would be false. What exists
-is verified documentation and a specified investigation.
+Phase 0 (scaffold) is ready to write and needs nothing from you. Which Tier-0
+features you want first is the only open product question
+([`docs/SPEC.md`](docs/SPEC.md) §7).

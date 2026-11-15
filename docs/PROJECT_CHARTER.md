@@ -1,54 +1,48 @@
 # Project Charter
 
 This repository started empty (one-line `README.md`, single commit `a4e543b`).
-Before any source code exists, two things have to be decided, because both change
-the structure of everything that follows. This file records what is decided, what
-is assumed, and what is blocked.
+Two decisions determine the structure of everything that follows; both are now
+recorded here with their consequences, followed by the decisions that follow from
+the references and the work order.
 
-## 1. What are we building? — OPEN
+## 1. What are we building? — DECIDED: a feature mod
 
-The project instructions define *how* to work (reference discipline, evidence
-classification, the Zaphkiel loop) but not *what* the artifact should do. That is
-deliberate: instructions are policy, the product is the user's call.
+Decided by the user 2026-11-15: **a feature mod** — a native mod that adds in-game
+functionality (HUD/visual/player convenience) delivered as a `.levipack` and
+toggled from the LeviLauncher mod menu. Requirement spec: `docs/SPEC.md`.
 
-Until this is answered, writing game-facing code would be guessing at the
-requirement. What exists instead is the part that does **not** depend on the
-answer:
+The alternative directions were considered and are on record so the choice is
+auditable:
 
-- `docs/REFERENCE_FINDINGS.md` — what the two references actually are, cited.
-- `docs/CROSS_VERSION.md` — how we build so a game update is a data change.
-- `docs/EVIDENCE_LOG.md` — classified state of knowledge, including what is
-  unknown.
-- `docs/INVESTIGATIONS.md` — the first Zaphkiel request, ready to issue.
+| Direction | Why not now |
+|---|---|
+| **Toolkit/SDK as the product** | It is still being built — but *internally*, as the facts layer every feature sits on (`docs/IMPLEMENTATION_PLAN.md` Phase 1). Shipping it alone would produce nothing the user can see. |
+| **Single-purpose tool** | Narrowest path, but the user chose a feature mod, and the plan is ordered so the same work stays reusable. |
 
-**Needed from the user** (any one is enough to start):
-1. A target build (`libminecraftpe.so` version), or confirmation to use the same
-   build as their other projects.
-2. A feature statement: what should the mod *do*, in one or two sentences.
+What that decision *changes*: the feature architecture from the reference
+(module lifecycle + registry + event bus + config + menu + draw path) is now
+in scope and is reused structurally. What it does **not** change: the
+version-durability rules in `docs/CROSS_VERSION.md` still apply to every feature.
 
-The three directions differ enough structurally that picking wrong would waste
-the work:
+A useful consequence, established from the preloader headers (`F-024`): the
+launcher provides the whole HUD/UI/input surface, so **Tier-0 features need no
+game-binary facts**. That is why the plan can ship something real before T-P1.
 
-| Direction | What it implies | Main risk |
-|---|---|---|
-| **A. Feature mod** (a UI/player/visual feature) | Reuse the reference's feature architecture: module registry, event bus, config, HUD draw path | Needs D3 offsets early → highest re-verification cost per feature |
-| **B. Toolkit/SDK** (the reusable layer: resolver, verifier, version registry, report) | No feature code; the deliverable is the layer that makes A cheap and safe | Value only shows up once something consumes it |
-| **C. Single-purpose tool** (e.g. one focused capture/automation task) | Narrowest surface, fastest to evidence, smallest maintenance | Limits reuse later |
+## 2. Which build do we target? — DECIDED: 1.26.62 arm64
 
-My recommendation, stated as a recommendation and not a decision: **B then A**.
-The measurements in `docs/REFERENCE_FINDINGS.md` §2 are the reason — the
-reference's per-build cost is dominated by exactly the facilities B provides, and
-building A first reproduces that cost.
+Decided by the user 2026-11-15: **MCPE 1.26.62, arm64-v8a** — the same build as
+their other native-mod work.
 
-## 2. Which build do we target? — OPEN, blocking
+Consequences, stated precisely:
 
-Nothing version-specific can be written until this is answered (Q-001). The
-references target a *band* (`1.26.6X.X`), and the user's other work targets a
-*specific* build (`1.26.62`), and neither automatically applies here (F-023).
-
-Working assumption if no answer is given: **the user's current device build**, and
-every fact is re-verified rather than inherited. This assumption is written down
-so it can be corrected, not so it can pass silently.
+- The target is a *version*, not yet a verified *library image*. Evidence is
+  bound to one image, so `T-P1` still has to confirm size + segment table (and,
+  if obtainable, a hash) before any address or offset is trusted (`F-024`).
+- The user's prior 1.26.62 evidence is now a **candidate source**, not a data
+  source. If `T-P1` shows the same image, re-verification is cheap; if not, it is
+  reference-only. Nothing is inherited silently.
+- The reference's declared band (`1.26.6X.X`) does not make its values valid for
+  1.26.62 — `F-023` stands unchanged.
 
 ## 3. What is already decided
 
@@ -78,13 +72,23 @@ recorded so the reasoning is auditable.
 - Merging, releasing, or publishing anything without explicit approval
   (project instruction §6).
 
-## 5. How the work proceeds once §1/§2 are answered
+## 5. How the work proceeds now that §1/§2 are answered
 
-1. Answer `Q-005` (feature) → record the behavioural spec as requirements
-   (class CONFIRMED-as-requirements, feasibility separately).
-2. Issue `T-P1` → bind the build (`evidence/T-P1/`).
-3. Issue `T-P2` → prove the pipeline on one anchor.
-4. Implement the layer first (D-2..D-5), then the feature on top of it, with the
-   facts it needs resolved as data and gated at runtime.
-5. On every game update: new data file, new report diff, re-verify only what the
-   diff flags.
+Detail in `docs/IMPLEMENTATION_PLAN.md`; the order is:
+
+1. **Phase 0** — scaffold: lifecycle, config, menu, empty feature set, CI build.
+   No game facts. Not started.
+2. **Phase 1** — the facts layer (uniqueness, structural check, per-fact report,
+   build identity gate). No game facts; uses a synthetic test data file.
+3. **Phase 2** — first Tier-0 features (launcher-only; `F-024`). Still no game
+   facts. Needs a device to confirm on-screen behaviour.
+4. **Phase 3** — first Tier-1 game-state read. **First hard dependency on
+   Zaphkiel**: `T-P1` (library instance) → one targeted follow-up for one getter
+   → data-file entry → feature gated on it.
+5. **Phase 4** — Tier-2 hooks + scale-out, with HS-1..HS-4 enforced.
+
+`T-P1` is READY and queued; the user asked to defer issuance until the product
+plan existed, which it now does.
+
+On every game update afterwards: new data file, diff the resolution report,
+re-verify only what the diff flags.

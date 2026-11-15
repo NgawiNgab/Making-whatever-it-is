@@ -14,23 +14,28 @@ Numbering: `T-Pn` (this project). Evidence lives in `evidence/T-Pn/`.
 
 ---
 
-## T-P1 — Establish the build identity and mapping facts
+## T-P1 — Confirm the library instance and mapping facts
 
-**Status: BLOCKED** — waiting for the user to confirm the target build and say
-whether this project should target the same device/build as their existing work.
-Issuing it blind risks a full run against a binary we cannot use.
+**Status: READY — issuance deferred at the user's request (2026-11-15).**
+Target build is now fixed (1.26.62 arm64), so this is no longer blocked on a
+decision; it is queued. It still must run, because a target *version* is not a
+target *binary instance*: the same version string can be built differently, and
+every address and offset we later use is bound to one library image.
 
-**Objective.** Bind this project to a concrete `libminecraftpe.so`: its build
-string, size, segment table, text range, and whether RTTI/dynamic symbols are
-readable. Everything downstream is invalid without this.
+**Objective.** Pin down the user's exact `libminecraftpe.so`: size, segment table,
+text bounds, and whether RTTI/`.dynsym` are readable. Then establish whether the
+user's existing 1.26.62 evidence (Seed-Taker `ST-001`, which recorded
+`342,231,392` bytes / 7 segments / text `0x0-0x13686ff0`) describes **the same
+image**. If it does, that prior evidence becomes a candidate source we can
+re-verify cheaply instead of re-deriving from scratch.
 
-**Current evidence.** Reference band `1.26.6X.X` (F-002). A *different* user
-project reports `1.26.62` with `342,231,392` bytes, 7 segments
-(`Seed-Taker/evidence/ST-001`). That is **not** evidence about our build (F-023).
+**Current evidence.** Target version 1.26.62 (user, 2026-11-15). Reference band
+`1.26.6X.X` (F-002). Prior user evidence on a 1.26.62 image (`F-020`, `F-024`,
+`F-026`, `F-027`) — not yet proven to be the same image.
 
-**Unknowns.** Build string; exact library size; segment table; text bounds;
-RTTI reachability; `.dynsym` presence; the game's own `ClientInstance`/version
-symbol names as they appear in *this* binary.
+**Unknowns.** Library size/segments for *this device now*; identity vs. the prior
+image; RTTI reachability; `.dynsym` presence; the exact mangled RTTI form of the
+first types we need.
 
 **Commands.**
 
@@ -70,6 +75,11 @@ segment count, and the segment table — that header alone is most of T-P1's val
 
 - If the header shows **no** segment table / a different library path than the
   game's real `libminecraftpe.so` → stop; fix the mapping before anything else.
+- **Identity vs. prior evidence:** compare byte count + segment table against
+  `342,231,392` B / 7 segments (text `0x0-0x13686ff0`). Match on all three ⇒ the
+  prior image is *probably* the same and its findings become cheap candidates for
+  re-verification (still re-verified, never inherited). Any mismatch ⇒ prior
+  addresses are unusable; treat that evidence as reference-only.
 - If `findclass<>` returns matches in the expected count range and `hier<>`
   returns a non-empty base chain → **D1 route is usable**; proceed to T-P2.
 - If `findclass<>` returns 0 for all five → RTTI is not readable this run
@@ -146,15 +156,49 @@ conversion of every address.
 
 ---
 
-## T-P3 — Feature-specific facts (not yet specified)
+## T-P2.5 — Hook-safety precondition (may merge into T-P2)
 
-**Status: NOT SPECIFIED.** Cannot be written until `Q-005` is answered: the
-investigation targets are a function of the feature, and the project has no
-feature spec yet (`docs/PROJECT_CHARTER.md` §1).
+**Status: QUEUED.** Depends on T-P2 choosing an anchor.
 
-When the feature is known, this investigation will be written in the same format:
-one question, minimal commands, explicit decision criteria, and an explicit
-statement of which decay class each fact belongs to.
+**Objective.** Satisfy HS-1/HS-2 before we ever patch code: measure how long a
+candidate hook target actually is, so the patch cannot spill into its neighbour.
+This exists because of a real SIGILL on this build caused by an inline patch
+wider than the function (`F-026`).
+
+**Current evidence.** F-026 (crash at lib+`0x10b1da10`, ≥12-byte patch on an
+8-byte function; neighbour was load-bearing).
+
+**Unknowns.** Where function boundaries are for candidate hook targets, and
+whether the hook engine's patch width is documented anywhere we can rely on.
+
+**Commands** (per candidate, once T-P2 names it):
+
+```
+fn<0xANCHOR_VA>
+range<0xANCHOR_VA,0xANCHOR_VA+0x40>
+```
+
+Purpose: `fn<>`/`range<>` delimit the body so we can count instructions between
+entry and the terminating `ret`/`b` — that count is the hard upper bound on what a
+patch may overwrite. A candidate whose body is shorter than a plausible patch is
+**disqualified as a hook target**, regardless of how cleanly its signature
+resolves.
+
+**Decision criteria.** If body length ≤ the hook engine's minimum patch size ⇒ do
+not hook it; choose a caller or a longer function instead. Record the measured
+length next to the fact in the data file so the rule is auditable later.
+
+**Expected output.** `zaphkiel_out.txt` with the disassembled body.
+
+---
+
+## T-P3 — Feature-specific facts (first Tier-1 feature)
+
+**Status: NOT SPECIFIED.** Tier-0 features need no investigations at all
+(`F-024`). The first Tier-3-style investigation is written once the user picks
+which game-state readout they want first (`docs/SPEC.md` §7). It will follow the
+same format: one question, minimal commands, explicit decision criteria, and an
+explicit decay class (D1–D4) per fact.
 
 ---
 
