@@ -68,12 +68,21 @@ jobs:
           xmake f -y -p android -a arm64-v8a -m release --ndk=${{ steps.ndk.outputs.ndk-path }} 2>&1 | tee configure.log
           xmake -y 2>&1 | tee build.log
 
+      # The job log lives in blob storage and the step summary is not exposed by the
+      # API, but check-run *annotations* are. Emitting the failure as a warning
+      # annotation is the one channel that survives both limits.
       - name: Report failure
         if: failure()
         run: |
+          strip() { sed 's/\x1b\[[0-9;]*m//g' ; }
+          { tail -40 configure.log 2>/dev/null; echo "=== BUILD ==="; tail -40 build.log 2>/dev/null; } | strip > diag.txt || true
+          echo "Android build failed — diagnostics:" >> diag.txt
+          while IFS= read -r line; do
+            printf '::warning title=ci::%s\n' "${line//\%/%25}"
+          done < diag.txt
           echo "### Android build failed" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          { tail -60 configure.log 2>/dev/null; echo '--- build ---'; tail -60 build.log 2>/dev/null; } | sed 's/\x1b\[[0-9;]*m//g' >> "$GITHUB_STEP_SUMMARY"
+          cat diag.txt >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Show artifact
