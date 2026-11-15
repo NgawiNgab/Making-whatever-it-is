@@ -67,6 +67,8 @@ jobs:
           set -o pipefail
           xmake f -y -p android -a arm64-v8a -m release --ndk=${{ steps.ndk.outputs.ndk-path }} 2>&1 | tee configure.log
           xmake -y 2>&1 | tee build.log
+          # A failing first compile hides the command line, so ask xmake for it.
+          xmake show -t CameraFacing --verbose 2>&1 | tee -a build.log || true
 
       # The job log lives in blob storage and the step summary is not exposed by the
       # API, but check-run *annotations* are. Emitting the failure as a warning
@@ -80,7 +82,7 @@ jobs:
           # a fallback when nothing matches.
           {
             echo "=== ERRORS ==="
-            grep -nE "error:|Error|error|fatal|undefined reference|cannot|No such file" build.log 2>/dev/null | head -25
+            grep -nE "error:|fatal error|undefined reference|No such file|^-I|-isystem|clang\+\+ .*-c " build.log 2>/dev/null | head -20
             echo "=== BUILD TAIL ==="
             tail -12 build.log 2>/dev/null
           } | strip > diag.txt || true
