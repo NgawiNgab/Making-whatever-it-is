@@ -62,8 +62,8 @@ adjacent builds (§F-008).
 | Q-003 | Does a generated signature survive round-trip: `sig<>` returns exactly 1 match at the same function? | UNKNOWN | `T-P2`/`T-P3` |
 | Q-004 | Which single function is a safe "is the game alive and is this build ours" probe? | UNKNOWN | `T-P1` candidate selection → `T-P2` verification |
 | Q-005 | ~~What should be built?~~ **ANSWERED 2026-11-15: a feature mod**, and the first feature is specified: **camera facing** (`docs/features/CAMERA_FACING.md`) | CONFIRMED (as requirement) | T-CAM1 |
-| Q-006 | Is the camera driven by the player-rotation → turn-delta path, or by `InputComponent::cameraOrientation`, or by its own component? | UNKNOWN | T-CAM1 step 2 (this decides V1 feasibility) |
-| Q-007 | Yaw convention on this build: degrees or radians, range/wrap, and which sign is which cardinal? | UNKNOWN | T-CAM1 step 2 (`fn<>` of the turn function) |
+| Q-006 | Is the camera driven by the player-rotation → turn-delta path, or by `InputComponent::cameraOrientation`, or by its own component? | PARTIAL: the turn path is confirmed to run a get→add→wrap→set cycle on an angle pair (F-CAM-04), so it is the player-facing path. Whether the **camera** reads that pair or its own `MinecraftCamera::CameraComponent` is still open | T-CAM2 (live read) + `entt<…CameraComponent>` if needed |
+| Q-007 | Yaw convention on this build: degrees or radians, range/wrap, and which sign is which cardinal? | UNKNOWN — narrowed: one axis is **negated** before use (F-CAM-05) and a wrap helper runs on both, so a 0..360-style convention is likely, but the unit is not proven | T-CAM2 (live read vs known facing) |
 
 ## Platform capabilities we build on (no game facts)
 
@@ -113,13 +113,33 @@ marked otherwise: **none is verified on 1.26.62 yet.**
 | F-033 | Every camera relevant reference offset/signature is **unknown for 1.26.62** | UNKNOWN | Reference targets a `1.26.6X.X` band on a different version line (F-002/F-023); F-008/F-009 measure the churn | T-CAM1 |
 | F-034 | The game continuously overwrites rotation from input, so the feature must *hold* an orientation, not set it once | INFERRED (strong) | Reference's own session/restore-per-tick design (`freelook.cpp:126-141,224-237,353-359`); mobile look input is continuous by construction | T-CAM1 step 2: how the delta is applied |
 
+| F-CAM-01 | **Library image matches the prior 1.26.62 evidence** (342,231,392 B, 7 segments, text `0x0-0x13686ff0`) | INFERRED (strong) | `evidence/T-CAM1/zaphkiel_out.txt` header vs Seed-Taker `evidence/ST-001` header | A sha256 of the user's `libminecraftpe.so` would make it CONFIRMED |
+| F-CAM-02 | **`LocalPlayerApplyTurnDelta` pattern is a valid identity on 1.26.62: exactly 1 match, at RVA `0xaf60090`** | CONFIRMED | `evidence/T-CAM1/zaphkiel_out.txt:700-707` (56 B pattern, `matches: 1`, `func @ 0xaf60090, offset +0x0`) | Independent re-run; and see F-CAM-04 for the structural check that passed |
+| F-CAM-03 | The function at RVA `0xaf60090` is a **genuine 1408-byte function** (176 instrs, single `ret` at `0xaf60610`), stack-canary prologue, takes `(this=x0, delta=x1)` | CONFIRMED | Same block; extent and prologue/epilogue read directly | Nothing further needed for identity; **role** is INFERRED (F-CAM-04) |
+| F-CAM-04 | `0xaf60090` is the local turn path: it reads the current angle pair, adds the delta components, wraps, gates on `|delta|²`, negates one axis, calls the head-rotation getter/setter, and writes the result | INFERRED (strong) | `0xaf603ec-0xaf605d4`: `bl 0xfdb02a8`, `ldr s2,[x20,#4]`, `fadd`, `bl 0xe830314` (wrap), `fcmpe` gate, `fneg`, `str s8,[x8,#4]` | Runtime: does overriding this function's delta stop the view turning? (single decisive test) |
+| F-CAM-05 | **Delta semantics: additive per call (a rate), not absolute.** One axis is negated before use, so the two components do not share a sign convention. Result stored at **component+0x4** | INFERRED | F-CAM-04 disassembly (`fadd` on both axes; `fneg s0,s0` at `0xaf604e0`) | T-CAM2: read the live pair and correlate against the on-screen facing |
+| F-CAM-06 | **The reference's `ActorGetHeadRotation` / `ActorSetHeadRotation` patterns are NOT function identities on 1.26.62** — both match *inside* one function (`0xfdaff28`, at +0x380 and +0x2c0) | CONFIRMED (negative) | `zaphkiel_out.txt:1206-1210, 1581-1585` (`func @ 0xfdaff28 (offset +0x380 / +0x2c0 into fn)`) | Closed — patterns rejected |
+| F-CAM-07 | **The reference's `GetPerspective` pattern is NOT an identity on 1.26.62** — it lands on a 20-instruction glue sequence (`0x8a3e9fc`) that is a tail-call veneer plus an unrelated bool helper, immediately followed by another function | CONFIRMED (negative) | `zaphkiel_out.txt:2525-2558` (body shown; `br x1` tail-call at `0x8a3ea20`, then a new function starts at `0x8a3ea24`) | Closed — pattern rejected |
+| F-CAM-08 | `ClientInstanceGetLocalPlayer` pattern resolves uniquely to `0x9b7f6d0`, whose body loads `this+0x240`, calls the same `0xe82ffac`/`0xe82ffb0` pair used by the turn path, and null-returns on failure — consistent with a local-player getter | INFERRED | `zaphkiel_out.txt:2564-2598`; cross-checked against F-CAM-04's use of `this+0x240` | T-CAM2: obtain a live `ClientInstance*` and confirm the returned pointer is the player |
+| F-CAM-09 | **`ApplyTurnDelta` and the head-rotation get/set are INLINED into `0xaf60090` on 1.26.62**, so resolving `0xfdaff28`'s entry does not intercept them | INFERRED (strong) | Calls at `0xaf603ec`/`0xaf605d4` are intra-function `bl`s to offsets inside `0xfdaff28` | Nothing to disprove it that matters: the hook target is `0xaf60090` either way |
+| F-CAM-10 | **The camera is EnTT/ECS-style**: `findclass<CameraComponent>` exposes 66 `entt::basic_storage<…Component, EntityId, allocator>` names — `MinecraftCamera::{Camera,ActiveCamera,CurrentInputCamera,RenderCamera,GameCamera,OverrideCamera,StationaryCamera,DeathCamera,DefaultInputCamera,DebugCamera}Component`, `VanillaCamera::UpdatePlayerFromCameraComponent`, plus `CameraLookAtSystem`/`CameraDirectLookSystem`/`CameraBlendSystem`/`CameraAspectRatioSystem` tick systems | CONFIRMED (names) | `zaphkiel_out.txt:644-683` | Component *layouts* are not in this evidence; `entt<>` runs are the route |
+| F-CAM-11 | **`CameraAimAssistRotationOverrideComponent` and `CameraDirectLookComponent` exist** — the engine has a built-in camera-rotation-override and a direct-look path | CONFIRMED (names) | `zaphkiel_out.txt` `findclass<CameraComponent>` list | HYPOTHESIS: `CameraDirectLookComponent` may be a *supported* way to aim the camera without fighting input. Worth checking before writing any hook |
+| F-CAM-12 | **No RTTI type name contains `Rotation` or `StateVector`** → the rotation store cannot be found by name; it lives in an unnamed component (evidence points to the one hashed `0x2c74480`, storages at `this+0x10`/`+0x18`) | CONFIRMED (absence, in the searched set) | `grep -i rotation rtti_dump.txt` = 0; `grep -i statevector` = 0 | T-CAM2: `entt<>` / `struct<>` runs if the direct component route is wanted |
+| F-CAM-13 | **`rtti_dump.txt` is unusable for game classes**: it is a truncated live scan (`found 2000`) of `Xbl*`/system classes, containing no `entt`, no `basic_storage`, no actor classes | CONFIRMED (tool behaviour) | `evidence/T-CAM1/rtti_dump.txt` (first/last lines, count) | Use `findclass<>` for discovery; raise the scan limit if a full dump is ever needed |
+| F-CAM-14 | **`libminecraftpe.so` exports 0 dynamic symbols on this build** → `dlsym`-based symbol resolution is unavailable; only RTTI names + byte patterns work | CONFIRMED | `dynsym_dump.txt` (`mapped 0`, `[dynsym] 0 exported`) | Closed |
+| F-CAM-15 | **Signature counts alone are insufficient**: 3 of 6 "unique" matches were not function identities. Match count must be paired with a structural landing-site check | CONFIRMED | F-CAM-06/07 vs F-CAM-02/03 | Already encoded as R-2; this is the field evidence for it |
+
 ## Investigations
 
 - **T-P1** (READY, queued): library-instance confirmation. Satisfied
   automatically by any run whose `zaphkiel_out.txt` header is provided.
-- **T-CAM1** (READY, **issued 2026-11-15**): camera turn path + rotation storage
-  → `docs/investigations/T-CAM1.md`. First feature-specific run; unblocks
-  `docs/features/CAMERA_FACING.md`.
+- **T-CAM1** (**COMPLETE 2026-11-15**): camera turn path + rotation storage.
+  Evidence: `evidence/T-CAM1/` (3 files, hashed). Findings F-CAM-01..F-CAM-15.
+  **Headline:** the turn-delta pattern is a genuine, unique identity on our build
+  (`RVA 0xaf60090`, 1408-byte function) — but three of the other five reference
+  patterns are *false-uniques* and had to be rejected. Delta is additive per call;
+  the camera is EnTT/ECS-based; the lib exports no symbols.
+  **Next:** `T-CAM2` (step 2 — delta convention + live verification).
 
 The earlier queue items in `docs/INVESTIGATIONS.md` (`T-P2`, `T-P2.5`, `T-P3`)
 are pipeline hardening, not prerequisites for the camera feature; T-CAM1 supersedes

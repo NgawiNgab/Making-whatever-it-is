@@ -1,0 +1,39 @@
+=== Dynamic symbols ===
+  [dynsym] elf_base=0x70998bc000
+  [dynsym] DT tag=1 val=0x12
+  [dynsym] DT tag=1 val=0x1f
+  [dynsym] DT tag=1 val=0x38
+  [dynsym] DT tag=1 val=0x42
+  [dynsym] DT tag=1 val=0x4d
+  [dynsym] DT tag=1 val=0x57
+  [dynsym] DT tag=1 val=0x70
+  [dynsym] DT tag=1 val=0x7d
+  [dynsym] DT tag=1 val=0x86
+  [dynsym] DT tag=1 val=0x94
+  [dynsym] DT tag=1 val=0xa5
+  [dynsym] DT tag=1 val=0xad
+  [dynsym] DT tag=14 val=0xb5
+  [dynsym] DT tag=30 val=0x8
+  [dynsym] DT tag=1879048187 val=0x1
+  [dynsym] DT tag=7 val=0xaf49d0
+  [dynsym] DT tag=8 val=0x18188e8
+  [dynsym] DT tag=9 val=0x18
+  [dynsym] DT tag=1879048185 val=0xd402b
+  [dynsym] DT tag=23 val=0x145661e0
+  [dynsym] DT tag=2 val=0x10cc98
+  [dynsym] DT tag=3 val=0x13faccd0
+  [dynsym] DT tag=20 val=0x7
+  [dynsym] DT tag=6 val=0x143200c0
+  [dynsym] DT tag=11 val=0x18
+  [dynsym] DT tag=5 val=0x2f4ee4
+  [dynsym] DT tag=10 val=0x7ffae6
+  [dynsym] DT tag=1879047925 val=0x2463f0
+  [dynsym] DT tag=25 val=0x13f953d0
+  [dynsym] DT tag=27 val=0x4a28
+  [dynsym] DT tag=26 val=0x13f953c0
+  [dynsym] DT tag=28 val=0x10
+  [dynsym] DT tag=1879048176 val=0x14539500
+  [dynsym] DT tag=1879048190 val=0x14566160
+  [dynsym] DT tag=1879048191 val=0x4
+  [dynsym] DT tag=0 val=0x0
+  [dynsym] 0 exported

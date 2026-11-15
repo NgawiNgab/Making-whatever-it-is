@@ -13,8 +13,11 @@ Rules this file obeys (project instruction §3, §7):
 Numbering: `T-Pn` (pipeline/general) and `T-CAMn` (camera feature). Evidence
 lives in `evidence/<ID>/`.
 
-**Active:** [`T-CAM1`](investigations/T-CAM1.md) — camera turn path and rotation
-storage, for `docs/features/CAMERA_FACING.md`. Issued 2026-11-15.
+**Complete:** [`T-CAM1`](investigations/T-CAM1.md) — camera turn path and rotation
+storage. Results in `evidence/T-CAM1/`, findings F-CAM-01..F-CAM-15.
+
+**Active:** [`T-CAM2`](investigations/T-CAM2.md) — delta convention + live
+verification. Small follow-up; nothing else blocks the camera feature.
 
 The items below are the earlier general-purpose queue. They are kept for the
 record; T-CAM1 supersedes them as the next run, and T-P2.5's hook-length check is

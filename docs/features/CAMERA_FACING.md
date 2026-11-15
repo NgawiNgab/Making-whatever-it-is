@@ -123,10 +123,24 @@ evidence, not from a guess about Minecraft's coordinate system.
 - **R-d** Mobile input is a continuous writer; a hold implementation that runs on
   the wrong thread or too late in the frame will visibly jitter.
 
-## 6. Status
+## 6. Status — T-CAM1 complete, one field test left
 
-**Investigation `T-CAM1` (next document) is READY and is the gate for this
-feature.** No code is written for it yet, by design: the only thing that can make
-this feature safe is knowing, on our binary, which function receives the turn
-delta and which field the camera reads — and that is exactly what the
-investigation asks.
+**CONFIRMED on 1.26.62** (`evidence/T-CAM1/`, findings F-CAM-01..F-CAM-15):
+
+| Gate | Result |
+|---|---|
+| G-1 turn path is a unique identity | **PASS** — `LocalPlayerApplyTurnDelta` = RVA `0xaf60090`, exactly 1 match |
+| G-6 hook safety (function length) | **PASS** — 1408 bytes / 176 instructions, single `ret`. Patch width is a non-issue |
+| G-2 delta semantics | **PARTIAL** — additive per call (a *rate*), one axis **negated**, result written at `component+0x4` |
+| G-3 rotation storage | **PARTIAL** — lives in an unnamed EnTT component (hash `0x2c74480`), pair at `+0x4`; no type name contains `Rotation` |
+| G-4 camera source | **OPEN** — the engine has its own `MinecraftCamera::CameraComponent`; whether the view reads the player pair or that component is what Phase B of T-CAM2 settles |
+| G-5 yaw convention | **OPEN** — narrowed but not proven; needs a live read at a known facing |
+
+The reference's other camera patterns (`ActorGetHeadRotation`,
+`ActorSetHeadRotation`, `GetPerspective`) were **rejected** — they match uniquely
+in the binary but are not function entries. That is the first real payoff of
+requiring a structural check: three of six "successful" signature hits would have
+produced garbage hooks.
+
+Current blocker: `docs/investigations/T-CAM2.md` Phase A — a live angle readout at
+four known facings. Nothing else in the feature is blocked.

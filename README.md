@@ -3,18 +3,23 @@
 A **feature mod** for **Minecraft Bedrock 1.26.62 on Android `arm64-v8a`**
 (LeviLauncher/preloader), built under a strict reference-and-evidence discipline.
 
-Status: **first feature specified, awaiting one Zaphkiel run.**
-The first feature is **Camera Facing** — snap the view to a chosen yaw, cardinal
+Status: **turn path confirmed on 1.26.62; one field measurement left.**
+First feature: **Camera Facing** — snap the view to a chosen yaw, cardinal
 directions included: [`docs/features/CAMERA_FACING.md`](docs/features/CAMERA_FACING.md).
-The investigation that unblocks it is written and ready to run:
-[`docs/investigations/T-CAM1.md`](docs/investigations/T-CAM1.md).
+
+T-CAM1 is complete (`evidence/T-CAM1/`): the look/turn function is a unique,
+1408-byte real function at RVA `0xaf60090`, and its delta is **additive per call**
+with one axis negated. Three of the other five reference patterns turned out to be
+false uniques and were rejected. Remaining: a live angle readout to pin the yaw
+convention — [`docs/investigations/T-CAM2.md`](docs/investigations/T-CAM2.md).
 
 ## Documents
 
 | Document | What it holds |
 |---|---|
 | [`docs/features/CAMERA_FACING.md`](docs/features/CAMERA_FACING.md) | **The first feature**: behaviour, camera model, evidence gates, risks |
-| [`docs/investigations/T-CAM1.md`](docs/investigations/T-CAM1.md) | **The run to execute**: exact `zInput.txt`, purpose per line, decision criteria |
+| [`docs/investigations/T-CAM2.md`](docs/investigations/T-CAM2.md) | **Next step**: live angle readout that pins the yaw convention |
+| [`evidence/T-CAM1/`](evidence/T-CAM1/) | The T-CAM1 run: verbatim outputs + a README of verified findings |
 | [`docs/SPEC.md`](docs/SPEC.md) | What the mod does: requirements, feature tiers, hook-safety rules |
 | [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | Phases 0–4, exit criteria, what each phase needs from the user |
 | [`docs/CROSS_VERSION.md`](docs/CROSS_VERSION.md) | How a game update becomes a *data* change, not a rewrite |
@@ -49,11 +54,7 @@ that touches the game.
 
 ## Next step
 
-Run **T-CAM1** ([`docs/investigations/T-CAM1.md`](docs/investigations/T-CAM1.md))
-and send back `zaphkiel_out.txt`, `rtti_dump.txt`, `dynsym_dump.txt`. That single
-run also satisfies T-P1's library-identity check, so it is one round trip.
-
-What it answers: whether the reference's turn-delta signature is still unique on
-1.26.62, which function it lands on, how that function interprets its two floats,
-and whether the camera reads the player's rotation or its own component — the last
-one decides whether "camera only, body unchanged" is reachable.
+The turn function is found and is safe to hook. What remains is **which number
+means which direction** — a measurement, not more disassembly:
+[`docs/investigations/T-CAM2.md`](docs/investigations/T-CAM2.md) Phase A logs the
+live angle pair at four known facings and settles the convention from data.
