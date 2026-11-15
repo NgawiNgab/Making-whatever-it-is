@@ -10,7 +10,15 @@ Rules this file obeys (project instruction §3, §7):
 - VAs in results are converted to segment-relative RVAs before being used
   (`docs/CROSS_VERSION.md` §6.1).
 
-Numbering: `T-Pn` (this project). Evidence lives in `evidence/T-Pn/`.
+Numbering: `T-Pn` (pipeline/general) and `T-CAMn` (camera feature). Evidence
+lives in `evidence/<ID>/`.
+
+**Active:** [`T-CAM1`](investigations/T-CAM1.md) — camera turn path and rotation
+storage, for `docs/features/CAMERA_FACING.md`. Issued 2026-11-15.
+
+The items below are the earlier general-purpose queue. They are kept for the
+record; T-CAM1 supersedes them as the next run, and T-P2.5's hook-length check is
+folded into T-CAM1 step 2.
 
 ---
 

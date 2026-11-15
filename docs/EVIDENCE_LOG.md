@@ -61,7 +61,9 @@ adjacent builds (§F-008).
 | Q-002 | Is `libminecraftpe.so`'s RTTI/`.dynsym` reachable in the user's mapping (needed for the D1 route)? | UNKNOWN | `T-P1` (`findclass<>` + `dynsym` presence) |
 | Q-003 | Does a generated signature survive round-trip: `sig<>` returns exactly 1 match at the same function? | UNKNOWN | `T-P2`/`T-P3` |
 | Q-004 | Which single function is a safe "is the game alive and is this build ours" probe? | UNKNOWN | `T-P1` candidate selection → `T-P2` verification |
-| Q-005 | ~~What should be built?~~ **ANSWERED 2026-11-15: a feature mod** (user chose). Which *specific* Tier-0 features ship first is still open | CONFIRMED (as requirement) | `docs/SPEC.md` §7 |
+| Q-005 | ~~What should be built?~~ **ANSWERED 2026-11-15: a feature mod**, and the first feature is specified: **camera facing** (`docs/features/CAMERA_FACING.md`) | CONFIRMED (as requirement) | T-CAM1 |
+| Q-006 | Is the camera driven by the player-rotation → turn-delta path, or by `InputComponent::cameraOrientation`, or by its own component? | UNKNOWN | T-CAM1 step 2 (this decides V1 feasibility) |
+| Q-007 | Yaw convention on this build: degrees or radians, range/wrap, and which sign is which cardinal? | UNKNOWN | T-CAM1 step 2 (`fn<>` of the turn function) |
 
 ## Platform capabilities we build on (no game facts)
 
@@ -98,12 +100,30 @@ Samsung SM-A566B, Android 17 (API 37), arm64, non-rooted, LeviLauncher as the ho
 process. Source: Seed-Taker `evidence/CRASH-001/README.md`. Relevant because
 non-rooted + launcher-hosted is exactly the constraint set this project targets.
 
+## Camera-facing feature (T-CAM1)
+
+Findings for `docs/features/CAMERA_FACING.md`. All are reference-derived unless
+marked otherwise: **none is verified on 1.26.62 yet.**
+
+| ID | Finding | Class | Evidence / derivation | To confirm / disprove |
+|----|---------|-------|-----------------------|------------------------|
+| F-030 | The local look/turn path is a function taking `(Player*, Vec2* delta)`; two independent reference modules agree on the signature and role | CONFIRMED (reference source) | `BedrockTools/src/modules/visual/cinematiccamera.cpp:15-31` (scales the delta before forwarding), `freelook.cpp:22,224-237` (captures/restores around it) | T-CAM1 `sig<>` count + `fn<>` body on our binary |
+| F-031 | Player rotation is a *pointer* to a component (`Actor::mActorRotationComponent = 0x238`); the component's first `Vec2` is rotation, and Freelook copies 16 bytes from it | CONFIRMED (reference source) / UNKNOWN (our build) | `sdk/offsets/World.hpp:17`; `sdk/world/Actor.hpp:31-34`; `freelook.cpp:126-132,163` (16-byte save) | T-CAM1 step 2: `struct<LocalPlayer><0x238>` |
+| F-032 | A separate camera component exists (`CameraComponent::mOrientation = 0x28`, 16 bytes) written by the `UpdatePlayerFromCamera` pass; its semantic is never interpreted by the reference | CONFIRMED (existence) / HYPOTHESIS (`{yaw,pitch,?,?}`) | `sdk/offsets/Render.hpp:142-144`; `freelook.cpp:21,193-222`; `motionblur.cpp:539` | T-CAM1 step 2: disassemble the camera update; decide G-4 |
+| F-033 | Every camera relevant reference offset/signature is **unknown for 1.26.62** | UNKNOWN | Reference targets a `1.26.6X.X` band on a different version line (F-002/F-023); F-008/F-009 measure the churn | T-CAM1 |
+| F-034 | The game continuously overwrites rotation from input, so the feature must *hold* an orientation, not set it once | INFERRED (strong) | Reference's own session/restore-per-tick design (`freelook.cpp:126-141,224-237,353-359`); mobile look input is continuous by construction | T-CAM1 step 2: how the delta is applied |
+
 ## Investigations
 
-None issued yet. The first investigation (`T-P1`) is specified in
-`docs/INVESTIGATIONS.md` and is **blocked on the user's confirmation of build
-target and feature scope** — running it against the wrong build would produce
-evidence we could never use.
+- **T-P1** (READY, queued): library-instance confirmation. Satisfied
+  automatically by any run whose `zaphkiel_out.txt` header is provided.
+- **T-CAM1** (READY, **issued 2026-11-15**): camera turn path + rotation storage
+  → `docs/investigations/T-CAM1.md`. First feature-specific run; unblocks
+  `docs/features/CAMERA_FACING.md`.
+
+The earlier queue items in `docs/INVESTIGATIONS.md` (`T-P2`, `T-P2.5`, `T-P3`)
+are pipeline hardening, not prerequisites for the camera feature; T-CAM1 supersedes
+them for now and T-P2.5's hook-length check is folded into T-CAM1 step 2 (G-6).
 
 ## Change history
 

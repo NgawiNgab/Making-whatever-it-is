@@ -3,15 +3,18 @@
 A **feature mod** for **Minecraft Bedrock 1.26.62 on Android `arm64-v8a`**
 (LeviLauncher/preloader), built under a strict reference-and-evidence discipline.
 
-Status: **design complete, no code yet.** The target and product are decided, the
-architecture is derived from measured properties of the references, and the first
-Zaphkiel investigation is written and queued. Implementation order is in
-[`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
+Status: **first feature specified, awaiting one Zaphkiel run.**
+The first feature is **Camera Facing** — snap the view to a chosen yaw, cardinal
+directions included: [`docs/features/CAMERA_FACING.md`](docs/features/CAMERA_FACING.md).
+The investigation that unblocks it is written and ready to run:
+[`docs/investigations/T-CAM1.md`](docs/investigations/T-CAM1.md).
 
 ## Documents
 
 | Document | What it holds |
 |---|---|
+| [`docs/features/CAMERA_FACING.md`](docs/features/CAMERA_FACING.md) | **The first feature**: behaviour, camera model, evidence gates, risks |
+| [`docs/investigations/T-CAM1.md`](docs/investigations/T-CAM1.md) | **The run to execute**: exact `zInput.txt`, purpose per line, decision criteria |
 | [`docs/SPEC.md`](docs/SPEC.md) | What the mod does: requirements, feature tiers, hook-safety rules |
 | [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | Phases 0–4, exit criteria, what each phase needs from the user |
 | [`docs/CROSS_VERSION.md`](docs/CROSS_VERSION.md) | How a game update becomes a *data* change, not a rewrite |
@@ -46,6 +49,11 @@ that touches the game.
 
 ## Next step
 
-Phase 0 (scaffold) is ready to write and needs nothing from you. Which Tier-0
-features you want first is the only open product question
-([`docs/SPEC.md`](docs/SPEC.md) §7).
+Run **T-CAM1** ([`docs/investigations/T-CAM1.md`](docs/investigations/T-CAM1.md))
+and send back `zaphkiel_out.txt`, `rtti_dump.txt`, `dynsym_dump.txt`. That single
+run also satisfies T-P1's library-identity check, so it is one round trip.
+
+What it answers: whether the reference's turn-delta signature is still unique on
+1.26.62, which function it lands on, how that function interprets its two floats,
+and whether the camera reads the player's rotation or its own component — the last
+one decides whether "camera only, body unchanged" is reachable.

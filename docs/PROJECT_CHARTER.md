@@ -8,8 +8,15 @@ the references and the work order.
 ## 1. What are we building? — DECIDED: a feature mod
 
 Decided by the user 2026-11-15: **a feature mod** — a native mod that adds in-game
-functionality (HUD/visual/player convenience) delivered as a `.levipack` and
-toggled from the LeviLauncher mod menu. Requirement spec: `docs/SPEC.md`.
+functionality delivered as a `.levipack` and toggled from the LeviLauncher mod
+menu. Requirement spec: `docs/SPEC.md`.
+
+The user then narrowed scope to a deliberately small first feature: **camera
+facing** — snap the view to a chosen yaw, cardinal directions included. Its brief
+is [`docs/features/CAMERA_FACING.md`](features/CAMERA_FACING.md) and its blocking
+investigation is [`docs/investigations/T-CAM1.md`](investigations/T-CAM1.md). The
+earlier project (Seed-Taker) is parked by user decision and is used here only as a
+source of evidence, never as a code base.
 
 The alternative directions were considered and are on record so the choice is
 auditable:
