@@ -23,9 +23,9 @@ jobs:
       - name: SDK API type-check
         run: ./scripts/check_sdk_api.sh
 
-  # Same tests through the real build system. The scripts above prove the code is
-  # correct; this proves xmake.lua is valid and that the host targets build under it.
-  # Without this step a broken build file is only discovered on the Android runner.
+  # Same tests through the real build system, proving xmake.lua is valid and that
+  # the host targets build under it. Without this, a broken build file is only
+  # discovered on the Android runner.
   xmake-host:
     runs-on: ubuntu-latest
     steps:
@@ -42,39 +42,36 @@ jobs:
       - name: Build and run host tests
         run: xmake build -y camface_tests && xmake run -y camface_tests
 
-  # Native library. This job is the real target and it is expected to fail until the
-  # preloader SDK is reachable from CI: preloader-android is cloned and built with
-  # CMake during package resolution. Left non-blocking so a red Android job does not
-  # hide a green host result, but it runs for real rather than being a placeholder.
+  # The real artifact. Recipe copied from the reference (BedrockTools
+  # .github/workflows/build.yml): xmake + nttld/setup-ndk@v1 for NDK r28c.
+  #
+  # This is the only place an Android build can happen: the NDK is installed by the
+  # action on the runner, so nothing needs to be fetched from a local environment.
   android:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install xmake
+      - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
         with:
           xmake-version: v3.1.2
 
-      - name: Install NDK r28c
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r28c
+
+      - name: Build and package
         run: |
-          echo "NDK provisioning is not wired up yet."
-          echo "The build needs NDK r28c at ANDROID_NDK_HOME; see docs/IMPLEMENTATION_PLAN.md."
-          exit 1
+          xmake f -y -p android -a arm64-v8a -m release --ndk=${{ steps.ndk.outputs.ndk-path }}
+          xmake -y
 
-      - name: Configure for Android
-        if: env.ANDROID_NDK_HOME != ''
-        run: xmake f -p android -a arm64-v8a --ndk="$ANDROID_NDK_HOME" -m release -y
+      - name: Show artifact
+        run: find build/android -name '*.levipack' -o -name '*.so' | sort
 
-      - name: Build
-        if: env.ANDROID_NDK_HOME != ''
-        run: xmake build -y CameraFacing
-
-      - name: Upload artifact
-        if: env.ANDROID_NDK_HOME != ''
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: CameraFacing-levipack
           path: build/android/arm64-v8a/release/*.levipack
-          if-no-files-found: warn
+          if-no-files-found: error
