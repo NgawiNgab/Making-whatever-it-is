@@ -1,0 +1,31 @@
+name: build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Runs on a normal runner with no Android toolchain: it proves the parts that can
+  # be proven without a device (parser, resolver, report, data hygiene).
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Host unit tests
+        run: ./scripts/run_host_tests.sh
+      - name: Build-data hygiene
+        run: ./scripts/check_no_build_literals.sh
+
+  # Native library. Expected to fail until the preloader SDK is available to CI;
+  # it is here so a real build failure is visible rather than discovered late.
+  android:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Note
+        run: |
+          echo "Android packaging needs xmake + NDK r28c + the preloader SDK."
+          echo "Not wired up yet; see docs/IMPLEMENTATION_PLAN.md."

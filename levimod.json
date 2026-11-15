@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "id": "camerafacing",
+  "version": "0.1.0",
+  "minecraft_versions": [
+    "1.26.62"
+  ],
+  "info": {
+    "name": "Camera Facing",
+    "author": "NgawiNgab",
+    "description": "Observe and snap the camera to a chosen yaw (cardinal directions included).",
+    "homepage_url": "https://github.com/NgawiNgab/Making-whatever-it-is",
+    "tags": ["Camera", "Utility"]
+  },
+  "release_assets": {
+    "include": ["*.levipack", "*.so"],
+    "labels": {
+      "CameraFacing.levipack": "LeviPack",
+      "libCameraFacing.so": "Native library"
+    }
+  }
+}

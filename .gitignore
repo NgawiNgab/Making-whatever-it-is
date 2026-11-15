@@ -1,0 +1,22 @@
+# Build output
+build/
+out/
+target/
+*.so
+*.o
+*.a
+*.levipack
+
+# Toolchain artifacts
+.xmake/
+compile_commands.json
+.cache/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Host test binaries
+camface_tests

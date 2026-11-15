@@ -3,20 +3,34 @@
 A **feature mod** for **Minecraft Bedrock 1.26.62 on Android `arm64-v8a`**
 (LeviLauncher/preloader), built under a strict reference-and-evidence discipline.
 
-Status: **turn path confirmed on 1.26.62; one field measurement left.**
+Status: **scaffold written and host-verified; needs an on-device build.**
 First feature: **Camera Facing** — snap the view to a chosen yaw, cardinal
 directions included: [`docs/features/CAMERA_FACING.md`](docs/features/CAMERA_FACING.md).
 
 T-CAM1 is complete (`evidence/T-CAM1/`): the look/turn function is a unique,
 1408-byte real function at RVA `0xaf60090`, and its delta is **additive per call**
 with one axis negated. Three of the other five reference patterns turned out to be
-false uniques and were rejected. Remaining: a live angle readout to pin the yaw
-convention — [`docs/investigations/T-CAM2.md`](docs/investigations/T-CAM2.md).
+false uniques and were rejected.
+
+The Phase A scaffold now exists — [`docs/T-CAM2_PHASE_A.md`](docs/T-CAM2_PHASE_A.md).
+It installs exactly one game-address hook (the confirmed turn path) and draws a
+readout proving that hook fires, so the yaw convention can be measured rather than
+assumed. It does not snap the camera yet.
+
+```bash
+./scripts/run_host_tests.sh      # 47 checks: parser, resolver rules, report
+./scripts/check_sdk_api.sh       # type-checks every SDK-facing source
+./scripts/check_no_build_literals.sh   # keeps game constants inside data/
+```
+
+**Not yet done:** the Android build (no NDK in the dev environment that wrote this)
+and any on-device run. No `.so` has ever been produced or loaded.
 
 ## Documents
 
 | Document | What it holds |
 |---|---|
+| [`docs/T-CAM2_PHASE_A.md`](docs/T-CAM2_PHASE_A.md) | **The scaffold that runs now**: what it hooks, what it proves, how to measure yaw |
 | [`docs/features/CAMERA_FACING.md`](docs/features/CAMERA_FACING.md) | **The first feature**: behaviour, camera model, evidence gates, risks |
 | [`docs/investigations/T-CAM2.md`](docs/investigations/T-CAM2.md) | **Next step**: live angle readout that pins the yaw convention |
 | [`evidence/T-CAM1/`](evidence/T-CAM1/) | The T-CAM1 run: verbatim outputs + a README of verified findings |
