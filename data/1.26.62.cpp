@@ -31,12 +31,37 @@ constexpr std::string_view kClientInstanceLocalPlayerPattern =
     "1F 01 09 EB ?? ?? ?? 54 ?? ?? ?? A9 ?? ?? ?? F9 ?? ?? ?? 91 C0 03 5F D6 ?? ?? ?? ?? "
     "C0 03 5F D6";
 
+// The two hooks that make a real readout possible. Both patterns are copied
+// verbatim from BedrockTools src/core/memory/Signatures.cpp (SignatureId::
+// ClientInstanceUpdate, SignatureId::NormalTick) -- see
+// docs/BEDROCKTOOLS_REFERENCE.md for the path:line citations.
+//
+// Why these two:
+//   ClientInstanceUpdate gives us the ClientInstance pointer, because the game
+//   passes it as argument 0 to its own update function.
+//   NormalTick is the per-actor tick; running *after* the original means the
+//   rotation component has already been written this frame.
+constexpr std::string_view kClientInstanceUpdatePattern =
+    "?? ?? ?? FC ?? ?? ?? A9 ?? ?? ?? A9 ?? ?? ?? A9 ?? ?? ?? A9 ?? ?? ?? A9 ?? ?? ?? A9 "
+    "?? ?? ?? 91 ?? ?? ?? D1 59 D0 3B D5 ?? ?? ?? 52 F5 03 02 2A";
+
+constexpr std::string_view kNormalTickPattern =
+    "?? ?? ?? FC ?? ?? ?? A9 ?? ?? ?? A9 ?? ?? ?? A9 ?? ?? ?? A9 ?? ?? ?? A9 ?? ?? ?? A9 "
+    "?? ?? ?? 91 ?? ?? ?? D1 54 D0 3B D5 F3 03 00 AA ?? ?? ?? F9 ?? ?? ?? F8 ?? ?? ?? 39";
+
 constexpr SignatureEntry kSignatures[] = {
     // Verified: matches 1, function @ rva 0xaf60090, 1408 bytes, single ret @ 0xaf60610.
     // Prefix `?? ?? ?? D1` is `sub sp, sp, #imm`; the pattern's fixed bytes `56 D0 3B D5`
     // are the `mrs x22, tpidr_el0` that makes this function self-identifying.
     {"LocalPlayerApplyTurnDelta", kTurnDeltaPattern, 0x400, "fd7bbda9"},
     {"ClientInstanceGetLocalPlayer", kClientInstanceLocalPlayerPattern, 0x40, "ff4300d1"},
+
+    // Both added 2026-11-15 after the first device run showed the readout could not
+    // show a yaw at all: without a player pointer there is nothing to read. Neither
+    // has been run on this build yet -- if either is Missing/Ambiguous the readout
+    // says so instead of drawing a fake zero.
+    {"ClientInstanceUpdate", kClientInstanceUpdatePattern, 0x400, "fc.."},
+    {"NormalTick", kNormalTickPattern, 0x400, "fc.."},
 };
 
 constexpr RttiSlotEntry kRttiSlots[] = {

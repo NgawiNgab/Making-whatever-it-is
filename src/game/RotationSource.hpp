@@ -1,58 +1,61 @@
 #pragma once
 
-#include <camfacesdk/BuildData.hpp>
-
 #include <cstdint>
 #include <optional>
 
 namespace camface::game {
 
-// One decoded orientation. `yaw`/`pitch` are in the game's own units — which is
-// precisely what T-CAM2 has not yet established, so nothing here assumes degrees.
+// One decoded orientation. Degrees are NOT assumed: the readout prints the raw
+// floats, and the four-cardinal measurement is what tells us whether these are
+// degrees, radians or something else.
 struct Orientation {
-    float yaw = 0.0f;
-    float pitch = 0.0f;
-};
-
-// Which component the pair came from. Recorded so the log proves what was read
-// rather than implying a semantic that has not been verified.
-enum class SourceKind {
-    None,
-    TurnComponent,  // the EnTT component the turn path reads/writes
-};
-
-struct Reading {
-    Orientation value;
-    SourceKind kind = SourceKind::None;
+    float pitch = 0.0f;  // component +0
+    float yaw = 0.0f;    // component +4
     bool valid = false;
 };
 
-// Reads the live orientation. Implemented only when the build data carries a
-// *verified* accessor; with the current data file (empty offsets table) this is
-// inert and reports why. That is intentional: an unverified offset read is worse
-// than no reading at all (docs/CROSS_VERSION.md section 5).
+// Reads the local player's rotation the way BedrockTools does.
+//
+// The chain, and where each link comes from:
+//   ClientInstance*            <- captured from the game's own update call
+//                                 (hook on ClientInstanceUpdate, arg 0)
+//   Player* localPlayer()      <- signature ClientInstanceGetLocalPlayer
+//   Player* + 0x238            <- Actor::mActorRotationComponent, a *pointer* field
+//   (*ptr) + 0                pitch
+//   (*ptr) + 4                yaw
+//
+// Offsets and the deref chain are copied from BedrockTools
+// (include/bedrocktools/sdk/offsets/World.hpp, sdk/world/Actor.hpp). They are
+// INFERRED for 1.26.62, not measured here -- BedrockTools targets the same
+// version family, which is evidence, not proof. The readout marks itself
+// "UNVERIFIED" until a reading is sanity-checked against a known facing.
 class RotationSource {
 public:
-    void configure(camfacesdk::BuildData const& build);
+    void setClientInstance(void* clientInstance);
+    void setLocalPlayerGetter(std::uintptr_t getLocalPlayerRva);
+    void setBaseAddress(std::uintptr_t base) { m_base = base; }
 
-    // Called by the turn hook, which is the one place where a pointer to the
-    // relevant component is available as a live argument.
-    void observeTurnCall(void* self, void* deltaPtr);
+    // Fetches the player pointer. Called from the tick hook, after the original, so
+    // the rotation component is already updated for this frame.
+    void refreshLocalPlayer();
 
-    [[nodiscard]] Reading read() const;
-    [[nodiscard]] bool ready() const noexcept { return m_ready; }
-    [[nodiscard]] char const* unavailableReason() const noexcept { return m_reason; }
+    [[nodiscard]] Orientation read() const;
+    [[nodiscard]] bool ready() const noexcept;
+    [[nodiscard]] char const* state() const noexcept { return m_state; }
 
-    // Number of turn calls observed. Proves the hook is live independent of
-    // whether orientation reading is wired, which is what T-CAM2 needs.
     [[nodiscard]] std::uint64_t turnCalls() const noexcept { return m_turnCalls; }
+    void noteTurnCall() { ++m_turnCalls; }
+    void noteTick() { ++m_ticks; }
+    [[nodiscard]] std::uint64_t ticks() const noexcept { return m_ticks; }
 
 private:
-    bool m_ready = false;
-    char const* m_reason = "no verified accessor in build data";
+    void* m_clientInstance = nullptr;
+    void* m_localPlayer = nullptr;
+    std::uintptr_t m_getLocalPlayer = 0;  // runtime address, 0 = unresolved
+    std::uintptr_t m_base = 0;
+    char const* m_state = "no client instance yet";
     std::uint64_t m_turnCalls = 0;
-    void* m_self = nullptr;
-    void* m_delta = nullptr;
+    std::uint64_t m_ticks = 0;
 };
 
 }  // namespace camface::game

@@ -2,27 +2,24 @@
 
 #include <camfacesdk/Module.hpp>
 
+#include "../game/RotationSource.hpp"
+
 #include <array>
-#include <atomic>
 #include <cstddef>
 #include <string>
 #include <vector>
 
 namespace camface::features {
 
-// The first real feature: an on-screen readout that measures the game's yaw
-// convention on-device (T-CAM2 Phase A).
+// The on-screen readout. Its only job is to show the live yaw so the convention can
+// be measured in four readings, and to log a labelled sample each time the user
+// presses "Mark reading".
 //
-// It is deliberately an *observer* first. It draws nothing derived from an
-// assumed convention and writes no game state; it reports what it sees, so the
-// four cardinal readings that pin down yaw/pitch units and sign come from data.
-// Once those readings exist, the snap logic in this same module turns on behind
-// the same fact gate.
+// Drawing follows BedrockTools' HUD modules exactly (src/modules/hud/armorhud.cpp,
+// compass.cpp): submit draw commands AND an editor element every frame, with a
+// position that the HUD editor can move.
 class CameraFacingModule final : public camfacesdk::Module {
 public:
-    // One definition of the id, shared by the menu registration and the draw calls.
-    // A mismatch between those two would silently produce a module that toggles but
-    // never draws, so they must not be able to drift.
     static constexpr std::string_view kModuleId = "cameraFacing";
 
     CameraFacingModule();
@@ -34,31 +31,29 @@ public:
     void onFrame(float deltaSeconds) override;
     void onConfigChanged(std::string_view key, std::string_view value) override;
 
-    // Called by the runtime after facts are resolved, before first frame.
-    void bind(bool hookInstalled, char const* hookStatus, bool rotationReady,
-              char const* rotationReason, std::uint64_t* turnCallCounter);
+    void bind(game::RotationSource* rotation, char const* hookStatus, bool hooksInstalled);
 
-    // The launcher-facing draw list. Filled each frame in onFrame().
-    [[nodiscard]] std::vector<std::string> const& drawLines() const noexcept {
-        return m_lines;
-    }
+    // HUD position, persisted by the launcher's config, matching the reference's
+    // hudPosX / hudPosY convention (compass.hpp:22).
+    float hudPosX = 20.0f;
+    float hudPosY = 120.0f;
 
-    // Exposed for the log line the runtime emits once per second.
+    [[nodiscard]] std::vector<std::string> const& drawLines() const noexcept { return m_lines; }
     [[nodiscard]] std::string statusText() const;
+
+    // Snapshot of the last marked reading, for the log.
+    [[nodiscard]] std::string lastMark() const;
 
 private:
     void rebuildLines();
 
-    bool m_hookInstalled = false;
+    game::RotationSource* m_rotation = nullptr;
     std::string m_hookStatus = "not attempted";
-    bool m_rotationReady = false;
-    std::string m_rotationReason = "unknown";
-    std::uint64_t* m_turnCalls = nullptr;
-    std::uint64_t m_lastSeen = 0;
+    bool m_hooksInstalled = false;
 
-    std::atomic_bool m_captureNext{false};
-    std::array<std::string, 8> m_captures{};
-    std::size_t m_captureCount = 0;
+    bool m_captureNext = false;
+    std::array<std::string, 8> m_marks{};
+    std::size_t m_markCount = 0;
 
     std::vector<std::string> m_lines;
     float m_elapsed = 0.0f;

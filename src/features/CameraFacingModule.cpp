@@ -1,117 +1,182 @@
 #include "CameraFacingModule.hpp"
 
-#include <camfacesdk/Pattern.hpp>
+#include <pl/Logger.hpp>
+#include <pl/ModMenu.hpp>
 
 #include <cstdio>
 
 namespace camface::features {
 namespace {
 
-// Facts this module needs before it may touch the game at all.
+auto& log() { return pl::log::Logger::getOrCreate("CameraFacing"); }
+
 constexpr camfacesdk::FactRequirement kRequirements[] = {
-    {"LocalPlayerApplyTurnDelta", true},
-    // Nice-to-have: used for the local-player check, but not required to observe
-    // the turn path, and still INFERRED (evidence F-CAM-08).
-    {"ClientInstanceGetLocalPlayer", false},
+    // Without these three there is no player pointer and therefore no yaw.
+    {"ClientInstanceUpdate", true},
+    {"NormalTick", true},
+    {"ClientInstanceGetLocalPlayer", true},
 };
 
 }  // namespace
 
-CameraFacingModule::CameraFacingModule()
-    : Module(std::string(kModuleId), "Camera Facing") {}
+CameraFacingModule::CameraFacingModule() : Module(std::string(kModuleId), "Camera Facing") {}
 
 std::span<camfacesdk::FactRequirement const> CameraFacingModule::requirements() const {
     return kRequirements;
 }
 
+void CameraFacingModule::bind(game::RotationSource* rotation, char const* hookStatus,
+                              bool hooksInstalled) {
+    m_rotation = rotation;
+    m_hookStatus = hookStatus != nullptr ? hookStatus : "unknown";
+    m_hooksInstalled = hooksInstalled;
+}
+
 void CameraFacingModule::onEnable() {
-    m_captureNext.store(false, std::memory_order_release);
+    m_captureNext = false;
+    log().info("readout enabled");
 }
 
 void CameraFacingModule::onDisable() {
-    m_captureNext.store(false, std::memory_order_release);
     m_lines.clear();
-}
-
-void CameraFacingModule::bind(bool hookInstalled, char const* hookStatus, bool rotationReady,
-                              char const* rotationReason, std::uint64_t* turnCallCounter) {
-    m_hookInstalled = hookInstalled;
-    m_hookStatus = hookStatus != nullptr ? hookStatus : "unknown";
-    m_rotationReady = rotationReady;
-    m_rotationReason = rotationReason != nullptr ? rotationReason : "unknown";
-    m_turnCalls = turnCallCounter;
+    // Clear the overlay so a disabled module leaves nothing behind
+    // (armorhud.cpp:548-552 does the same).
+    pl::modmenu::submitDrawCommands(kModuleId, {});
+    pl::modmenu::submitHudEditorElements(kModuleId, {});
 }
 
 void CameraFacingModule::onConfigChanged(std::string_view key, std::string_view value) {
-    // "Capture cardinal" is a Button config entry: pressing it marks the next
-    // observed orientation for the log, so the reading is tied to what the player
-    // was looking at. Name kept stable; it is persisted.
-    if (key == "capture") {
+    if (key == "mark") {
         (void)value;
-        m_captureNext.store(true, std::memory_order_release);
+        m_captureNext = true;
     }
 }
 
 void CameraFacingModule::rebuildLines() {
     m_lines.clear();
-    char buffer[160];
+    char buffer[192];
 
-    std::snprintf(buffer, sizeof(buffer), "Camera Facing");
-    m_lines.emplace_back(buffer);
+    m_lines.emplace_back("Camera Facing");
 
-    // Hook state is the thing T-CAM2 needs to see: a live counter proves the
-    // resolved address is the real turn path.
-    const std::uint64_t calls = (m_turnCalls != nullptr) ? *m_turnCalls : 0;
-    std::snprintf(buffer, sizeof(buffer), "hook: %s", m_hookStatus.c_str());
-    m_lines.emplace_back(buffer);
+    if (!m_hooksInstalled) {
+        m_lines.emplace_back("hooks: " + m_hookStatus);
+        return;
+    }
 
-    std::snprintf(buffer, sizeof(buffer), "turn calls: %llu",
-                  static_cast<unsigned long long>(calls));
-    m_lines.emplace_back(buffer);
+    if (m_rotation == nullptr) {
+        m_lines.emplace_back("no rotation source");
+        return;
+    }
 
-    // Orientation reading stays honestly labelled as unavailable until the build
-    // data carries a verified accessor. Never invent a value here.
-    std::snprintf(buffer, sizeof(buffer), "yaw/pitch: %s",
-                  m_rotationReady ? "reading" : m_rotationReason.c_str());
-    m_lines.emplace_back(buffer);
-
-    if (m_captureCount != 0) {
-        std::snprintf(buffer, sizeof(buffer), "last capture: %s",
-                      m_captures[m_captureCount - 1].c_str());
+    const game::Orientation orientation = m_rotation->read();
+    if (!orientation.valid) {
+        // Say why, rather than printing 0.0 and implying the player faces north.
+        m_lines.emplace_back(std::string("yaw: -- (") + m_rotation->state() + ")");
+    } else {
+        std::snprintf(buffer, sizeof(buffer), "yaw %.3f  pitch %.3f", orientation.yaw,
+                      orientation.pitch);
         m_lines.emplace_back(buffer);
     }
+
+    std::snprintf(buffer, sizeof(buffer), "tick %llu  turn %llu",
+                  static_cast<unsigned long long>(m_rotation->ticks()),
+                  static_cast<unsigned long long>(m_rotation->turnCalls()));
+    m_lines.emplace_back(buffer);
+
+    if (m_markCount != 0) m_lines.emplace_back("last: " + m_marks[m_markCount - 1]);
 }
 
 void CameraFacingModule::onFrame(float deltaSeconds) {
     m_elapsed += deltaSeconds;
 
-    if (m_captureNext.exchange(false, std::memory_order_acq_rel)) {
-        // Record the call counter at the moment the user asked. With orientation
-        // reading still unavailable this is the honest datum: it timestamps the
-        // capture against the live counter, ready for the values to be filled in.
-        char buffer[96];
-        const std::uint64_t calls = (m_turnCalls != nullptr) ? *m_turnCalls : 0;
-        std::snprintf(buffer, sizeof(buffer), "marked @ %llu calls",
-                      static_cast<unsigned long long>(calls));
-        if (m_captureCount < m_captures.size()) {
-            m_captures[m_captureCount++] = buffer;
+    if (m_captureNext) {
+        m_captureNext = false;
+        if (m_rotation != nullptr) {
+            const game::Orientation orientation = m_rotation->read();
+            char buffer[128];
+            if (orientation.valid) {
+                std::snprintf(buffer, sizeof(buffer), "yaw %.3f pitch %.3f", orientation.yaw,
+                              orientation.pitch);
+            } else {
+                std::snprintf(buffer, sizeof(buffer), "-- (%s)", m_rotation->state());
+            }
+            if (m_markCount < m_marks.size()) {
+                m_marks[m_markCount++] = buffer;
+            }
+            // The log line is the artifact: the whole point of marking is a labelled
+            // value in logcat that can be compared against a known facing.
+            log().info("MARK {}: {}", static_cast<int>(m_markCount), buffer);
         }
     }
 
-    // Rebuild at ~10 Hz: cheap, and avoids churning strings every frame.
-    if (m_elapsed >= 0.1f) {
-        m_elapsed = 0.0f;
-        rebuildLines();
+    if (m_elapsed < 0.1f) return;
+    m_elapsed = 0.0f;
+    rebuildLines();
+
+    // Draw. Pattern copied from BedrockTools' HUD modules: rebuild the command list
+    // every frame and submit it, alongside the editor element that makes the block
+    // draggable in the HUD editor.
+    if (m_lines.empty()) return;
+
+    std::vector<pl::modmenu::DrawCommand> commands;
+    commands.reserve(m_lines.size() + 1);
+
+    const float lineHeight = 18.0f;
+    float y = hudPosY;
+
+    pl::modmenu::DrawCommand background;
+    background.type = pl::modmenu::DrawCommandType::RectFilled;
+    background.x = hudPosX - 4.0f;
+    background.y = hudPosY - 4.0f;
+    background.w = 220.0f;
+    background.h = lineHeight * static_cast<float>(m_lines.size()) + 8.0f;
+    background.color = 0x99000000u;  // ARGB: translucent black for legibility
+    commands.push_back(background);
+
+    for (auto const& line : m_lines) {
+        pl::modmenu::DrawCommand command;
+        command.type = pl::modmenu::DrawCommandType::Text;
+        command.x = hudPosX;
+        command.y = y;
+        command.w = 220.0f;
+        command.h = lineHeight;
+        command.size = 14.0f;
+        command.color = 0xFFFFFFFFu;
+        command.text = line;
+        commands.push_back(command);
+        y += lineHeight;
     }
+
+    pl::modmenu::submitDrawCommands(kModuleId, commands);
+
+    pl::modmenu::HudEditorElement element;
+    element.elementId = "camface.readout";
+    element.displayName = "Camera Facing readout";
+    element.positionKeyX = "hudPosX";
+    element.positionKeyY = "hudPosY";
+    element.snapGroup = "camface";
+    element.x = hudPosX;
+    element.y = hudPosY;
+    element.width = 220.0f;
+    element.height = lineHeight * static_cast<float>(m_lines.size()) + 8.0f;
+    element.gridSize = 4.0f;
+    element.snapThreshold = 12.0f;
+    element.gridGap = 4.0f;
+    element.snapFlags = pl::modmenu::HudSnapGrid | pl::modmenu::HudSnapScreenCenter;
+    pl::modmenu::submitHudEditorElements(kModuleId, std::span<const pl::modmenu::HudEditorElement>(&element, 1));
 }
 
 std::string CameraFacingModule::statusText() const {
-    const std::uint64_t calls = (m_turnCalls != nullptr) ? *m_turnCalls : 0;
+    if (m_rotation == nullptr) return "no rotation source";
     char buffer[192];
-    std::snprintf(buffer, sizeof(buffer), "hook=%s turnCalls=%llu rotation=%s", m_hookStatus.c_str(),
-                  static_cast<unsigned long long>(calls),
-                  m_rotationReady ? "ready" : m_rotationReason.c_str());
+    std::snprintf(buffer, sizeof(buffer), "hooks=%s ticks=%llu turn=%llu state=%s",
+                  m_hookStatus.c_str(), static_cast<unsigned long long>(m_rotation->ticks()),
+                  static_cast<unsigned long long>(m_rotation->turnCalls()), m_rotation->state());
     return buffer;
+}
+
+std::string CameraFacingModule::lastMark() const {
+    return m_markCount == 0 ? std::string("none") : m_marks[m_markCount - 1];
 }
 
 }  // namespace camface::features

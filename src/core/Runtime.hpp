@@ -13,7 +13,7 @@ class GameImageSource;
 }
 
 namespace camface::game {
-class TurnHook;
+class GameHooks;
 class RotationSource;
 }
 
@@ -58,7 +58,7 @@ private:
 
     std::unique_ptr<platform::GameImageSource> m_image;
     std::unique_ptr<game::RotationSource> m_rotation;
-    std::unique_ptr<game::TurnHook> m_turnHook;
+
     std::unique_ptr<features::CameraFacingModule> m_cameraFacing;
 };
 
