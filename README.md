@@ -18,13 +18,16 @@ readout proving that hook fires, so the yaw convention can be measured rather th
 assumed. It does not snap the camera yet.
 
 ```bash
-./scripts/run_host_tests.sh      # 47 checks: parser, resolver rules, report
-./scripts/check_sdk_api.sh       # type-checks every SDK-facing source
+xmake f -p linux -a x86_64 -m release -y && xmake run -y camface_tests
+./scripts/check_sdk_api.sh             # type-checks every SDK-facing source
 ./scripts/check_no_build_literals.sh   # keeps game constants inside data/
 ```
 
-**Not yet done:** the Android build (no NDK in the dev environment that wrote this)
-and any on-device run. No `.so` has ever been produced or loaded.
+Build instructions, including the Android path and its known traps:
+[`docs/BUILD.md`](docs/BUILD.md).
+
+**Not yet done:** the Android build (no NDK available where this was written) and
+any on-device run. No `.so` has ever been produced or loaded.
 
 ## Documents
 
@@ -34,6 +37,7 @@ and any on-device run. No `.so` has ever been produced or loaded.
 | [`docs/features/CAMERA_FACING.md`](docs/features/CAMERA_FACING.md) | **The first feature**: behaviour, camera model, evidence gates, risks |
 | [`docs/investigations/T-CAM2.md`](docs/investigations/T-CAM2.md) | **Next step**: live angle readout that pins the yaw convention |
 | [`evidence/T-CAM1/`](evidence/T-CAM1/) | The T-CAM1 run: verbatim outputs + a README of verified findings |
+| [`docs/BUILD.md`](docs/BUILD.md) | How to build: host targets, Android target, toolchain traps |
 | [`docs/SPEC.md`](docs/SPEC.md) | What the mod does: requirements, feature tiers, hook-safety rules |
 | [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | Phases 0–4, exit criteria, what each phase needs from the user |
 | [`docs/CROSS_VERSION.md`](docs/CROSS_VERSION.md) | How a game update becomes a *data* change, not a rewrite |
