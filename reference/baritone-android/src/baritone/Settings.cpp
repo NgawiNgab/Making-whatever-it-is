@@ -1,0 +1,197 @@
+#include "baritone/Settings.h"
+
+#include <algorithm>
+#include <cerrno>
+#include <charconv>
+#include <cstdlib>
+#include <format>
+#include <fstream>
+#include <ranges>
+#include <stdexcept>
+
+namespace baritone {
+
+namespace {
+
+Settings g_defaults;
+
+std::vector<SettingInfo> buildTable() {
+    Settings& live = Settings::get();
+    std::vector<SettingInfo> table;
+#define BARITONE_SETTING_ENTRY(type, name, def, desc) \
+    table.push_back({#name, desc, SettingPtr{&live.name}, SettingPtr{&g_defaults.name}});
+    BARITONE_SETTINGS(BARITONE_SETTING_ENTRY)
+#undef BARITONE_SETTING_ENTRY
+    return table;
+}
+
+bool iequals(std::string_view a, std::string_view b) {
+    return std::ranges::equal(a, b, [](char x, char y) { return std::tolower(x) == std::tolower(y); });
+}
+
+std::string normalizeBlockName(std::string_view name) {
+    std::string out(name);
+    std::ranges::transform(out, out.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (out.find(':') == std::string::npos) out = "minecraft:" + out;
+    return out;
+}
+
+}  // namespace
+
+namespace {
+thread_local int g_uncensored = 0;
+}
+
+bool shouldCensorCoordinates() { return g_uncensored == 0 && Settings::get().censorCoordinates; }
+std::string maybeCensor(int coord) { return shouldCensorCoordinates() ? "<censored>" : std::to_string(coord); }
+UncensoredScope::UncensoredScope() { ++g_uncensored; }
+UncensoredScope::~UncensoredScope() { --g_uncensored; }
+
+Settings& Settings::get() {
+    static Settings live;
+    return live;
+}
+
+std::span<const SettingInfo> settingsTable() {
+    static const std::vector<SettingInfo> table = buildTable();
+    return table;
+}
+
+const SettingInfo* findSetting(std::string_view name) {
+    for (const SettingInfo& info : settingsTable()) {
+        if (iequals(info.name, name)) return &info;
+    }
+    return nullptr;
+}
+
+std::string settingValueToString(const SettingPtr& ptr) {
+    return std::visit(
+        [](auto* p) -> std::string {
+            using T = std::remove_pointer_t<decltype(p)>;
+            if constexpr (std::is_same_v<T, bool>) return *p ? "true" : "false";
+            else if constexpr (std::is_same_v<T, Vec3i>) return std::format("{},{},{}", p->x, p->y, p->z);
+            else if constexpr (std::is_same_v<T, Color>) return std::format("{},{},{}", p->r, p->g, p->b);
+            else if constexpr (std::is_same_v<T, std::string>) return *p;
+            else if constexpr (std::is_same_v<T, BlockList> || std::is_same_v<T, StringList>) {
+                std::string out;
+                for (const auto& b : *p) out += (out.empty() ? "" : ",") + b;
+                return out;
+            } else return std::format("{}", *p);
+        },
+        ptr);
+}
+
+void parseSettingValue(const SettingInfo& info, std::string_view text) {
+    std::visit(
+        [&](auto* p) {
+            using T = std::remove_pointer_t<decltype(p)>;
+            if constexpr (std::is_same_v<T, bool>) {
+                if (iequals(text, "true") || text == "1" || iequals(text, "on")) *p = true;
+                else if (iequals(text, "false") || text == "0" || iequals(text, "off")) *p = false;
+                else throw std::invalid_argument(std::format("'{}' is not true/false", text));
+            } else if constexpr (std::is_same_v<T, std::string>) {
+                *p = std::string(text);
+            } else if constexpr (std::is_same_v<T, StringList>) {
+                StringList list;
+                for (auto part : std::views::split(text, ',')) {
+                    std::string_view s(part.begin(), part.end());
+                    if (!s.empty()) list.emplace_back(s);
+                }
+                *p = std::move(list);
+            } else if constexpr (std::is_same_v<T, Vec3i> || std::is_same_v<T, Color>) {
+                int v[3]{};
+                int n = 0;
+                for (auto part : std::views::split(text, ',')) {
+                    std::string_view s(part.begin(), part.end());
+                    if (n == 3 || s.empty()) {
+                        throw std::invalid_argument(std::format("'{}' must be in x,y,z format", text));
+                    }
+                    const auto [end, error] = std::from_chars(s.data(), s.data() + s.size(), v[n]);
+                    if (error != std::errc{} || end != s.data() + s.size())
+                        throw std::invalid_argument(std::format("'{}' must contain three valid integers", text));
+                    ++n;
+                }
+                if (n != 3) throw std::invalid_argument(std::format("'{}' must be in x,y,z format", text));
+                if constexpr (std::is_same_v<T, Color>) {
+                    for (int c : v)
+                        if (c < 0 || c > 255) throw std::invalid_argument(std::format("'{}': color must be r,g,b with values from 0 to 255", text));
+                    *p = Color{v[0], v[1], v[2]};
+                } else {
+                    *p = Vec3i{v[0], v[1], v[2]};
+                }
+            } else if constexpr (std::is_same_v<T, BlockList>) {
+                BlockList list;
+                for (auto part : std::views::split(text, ',')) {
+                    std::string_view s(part.begin(), part.end());
+                    if (!s.empty()) list.push_back(normalizeBlockName(s));
+                }
+                *p = std::move(list);
+            } else if constexpr (std::is_floating_point_v<T>) {
+                const std::string buffer(text);
+                errno = 0;
+                char* end = nullptr;
+                const double parsed = std::strtod(buffer.c_str(), &end);
+                if (errno == ERANGE || end != buffer.c_str() + buffer.size()) {
+                    throw std::invalid_argument(std::format("'{}' is not a valid number", text));
+                }
+                *p = static_cast<T>(parsed);
+            } else {
+                T value{};
+                auto [ptr, ec] = std::from_chars(text.data(), text.data() + text.size(), value);
+                if (ec != std::errc{} || ptr != text.data() + text.size()) {
+                    throw std::invalid_argument(std::format("'{}' is not a valid number", text));
+                }
+                *p = value;
+            }
+        },
+        info.ptr);
+}
+
+bool isModified(const SettingInfo& info) {
+    return settingValueToString(info.ptr) != settingValueToString(info.defaultValue);
+}
+
+bool saveSettings(const std::string& path) {
+    std::ofstream out(path, std::ios::trunc);
+    if (!out) return false;
+    for (const SettingInfo& info : settingsTable()) {
+        if (isModified(info)) out << info.name << ' ' << settingValueToString(info.ptr) << '\n';
+    }
+    out.flush();
+    return out.good();
+}
+
+int loadSettings(const std::string& path, bool reset) {
+    std::ifstream in(path);
+    if (!in) return -1;
+    if (reset) {
+        for (const SettingInfo& setting : settingsTable()) resetSetting(setting);
+    }
+    int count = 0;
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        auto space = line.find(' ');
+        std::string name = line.substr(0, space);
+        std::string value = space == std::string::npos ? "" : line.substr(space + 1);
+        const SettingInfo* info = findSetting(name);
+        if (!info) continue;
+        try {
+            parseSettingValue(*info, value);
+            ++count;
+        } catch (const std::exception&) {
+        }
+    }
+    return count;
+}
+
+void resetSetting(const SettingInfo& info) {
+    std::visit(
+        [&](auto* p) {
+            using T = std::remove_pointer_t<decltype(p)>;
+            *p = *std::get<T*>(info.defaultValue);
+        },
+        info.ptr);
+}
+
+}  // namespace baritone

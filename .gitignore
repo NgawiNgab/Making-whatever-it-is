@@ -1,0 +1,17 @@
+# Build output
+build/
+*.o
+*.so
+*.d
+
+# Test output
+tests/out/
+
+# Dependencies, fetched by tests/run.sh instructions (see docs/features/AUTO_MINE.md)
+third_party/entt/
+third_party/fmt/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
