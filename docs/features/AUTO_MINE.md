@@ -3,9 +3,11 @@
 **Goal.** Select a block type (sugarcane, iron ore, anything). The bot finds the
 nearest instance, paths to it, mines it, and repeats. Hands-off.
 
-Status: **the bot half is done and tested. The game-input half is not.**
+Status: **nothing has been run in Minecraft. The command is wired and the bot's
+decisions are tested against a fake world; the game-input half is not written at
+all, so this will not mine anything yet.**
 
-## What now works
+## What is wired (compiles, not run in game)
 
 `#mine` is wired end to end in the mod layer:
 
@@ -20,16 +22,32 @@ Status: **the bot half is done and tested. The game-input half is not.**
 - Mod menu: `mine_blocks` (text), `mine_quantity` (text), `mine` (button).
   "Stop" cancels it.
 
-### Proven by tests, not assumed
+### What the tests do and do not show
 
-`./tests/run.sh` builds the core (82 files) and the mod layer, then runs three
-harnesses. All pass as of the commit that added `#mine`.
+**The tests do not run Minecraft.** There is no game here, no device, no
+`libminecraftpe.so`. What `./tests/run.sh` runs is:
 
-| Harness | What it proves |
-|---|---|
-| `mine_harness` | Bot finds sugarcane 5 blocks away, aims at it, walks to it (8.5 → 11.02 against the block), produces `Input::ClickLeft` |
-| `mine_cases_harness` | Same for **iron ore buried in stone** (bot tunneled to x=14.94 toward the ore at x=15), and for a sugarcane field, leaving its start position |
-| `mine_command_harness` | The shipping `#mine` parser handles names, quantities in either order, comma lists, namespaced names, and rejects junk safely |
+- a **fake world**: `tests/TestWorld.h` fills a `WorldSnapshot` with stone and a
+  few named blocks. It is a flat box, not a real chunk.
+- a **fake player**: `tests/TestPlayer.h` moves by `speed = 0.215` per tick in the
+  direction of its yaw, plus `y += 0.42` for a jump. That is invented physics, not
+  Bedrock's.
+- the **real** `MineProcess`, `WorldScanner`, pathfinder and `#mine` parser, compiled
+  unmodified from `reference/`.
+
+So the tests prove the *bot's decisions* against a stand-in world. They cannot
+prove what happens in the game.
+
+| Harness | What it actually establishes | What it cannot |
+|---|---|---|
+| `mine_harness` | Given a `WorldSnapshot` containing sugarcane 5 blocks away, `MineProcess` finds it, emits a target rotation, and emits `Input::ClickLeft`. Ends at x=11.02 against the block at 12. | That the game reacts to those clicks, that the block is really there, that reach/rotation match Bedrock |
+| `mine_cases_harness` | Same decision loop for ore buried at x=15 — the pathfinder chose to break through stone to get there. | Same as above |
+| `mine_command_harness` | `startMineFromText` parses input correctly and rejects junk. This part is close to the real thing, since parsing has no world dependency. | Anything about acting in the world |
+
+Useful, but narrower than "it works". The strongest statement supported is: **the
+routing from `#mine` to `MineProcess`, and `MineProcess`'s decisions in a
+synthetic world, are correct.** Everything downstream of `MovementState` is
+untested and, per the next section, unwritten.
 
 ## What still does not work — the blocker
 
