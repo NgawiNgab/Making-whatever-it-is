@@ -1,123 +1,98 @@
 # Zaphkiel requests
 
 I cannot run Zaphkiel — it needs your device. This file is the exact text to paste
-into `zInput.txt`, plus what I need back and what I will do with it.
+into `zInput.txt`.
 
 Target: **libminecraftpe.so 1.26.62.1, arm64-v8a.**
 
-Paste the block into
-`/storage/emulated/0/Android/media/org.levimc.launcher/kurumi/zInput.txt`, run
-Zaphkiel once, and give me back `zaphkiel_out.txt` (and `zaphkiel_out.c` if it
-appears).
+---
 
-> **Round 1 is done.** It found the function and its exact signature, but not its
-> address — see `ZAPH_FINDINGS.md`. Round 2 below is what closes that.
+## Where we are
+
+| Round | Asked for | Result |
+|---|---|---|
+| 1 | `findclass<GameMode>`, `vfc`, `fullvf` | Found the function and its signature. No vtable — `GameMode` is abstract. |
+| 2 | `h<GameMode>`, `string:`, `findclass<sendTryDestroyBlock>` | Nothing new. Same two typeinfo addresses as round 1, just a different ASLR base (`0xbad2000`). |
+
+Two of round 2's three lines were my mistakes, and I should have known better:
+
+- **`h<GameMode>` needs a header.** `h<>` parses a file from `headers/`; the docs say
+  so. I never supplied one, so "no struct found" was guaranteed.
+- **`string:` is not a documented command.** I half-remembered the README's formatting
+  and wrote it as if it resolved anything. The output's `String not found` is about
+  right.
+
+The third line did answer something useful: there is **no function symbol** for
+`_sendTryDestroyBlock` itself. Only the lambda's typeinfo exists. So there is no name
+to look up — which is why a string xref was never going to work.
+
+## What we know for certain
+
+```mangled: ZN8GameMode20_sendTryDestroyBlockERK8BlockPoshE
+  GameMode::_sendTryDestroyBlock(BlockPos const&, unsigned char)
+```
+
+One call site: the lambda at `ZN8GameMode20_sendTryDestroyBlockERK8BlockPoshE3$_0`,
+which takes no captures and returns `bool(optional<ItemStack>&)`. So the call passes
+a local stack `BlockPos` and a one-byte face.
 
 ---
 
-## Request 2 — the address of the destroy call (the remaining blocker)
-
-Round 1 confirmed the function is
-`GameMode::_sendTryDestroyBlock(BlockPos const&, unsigned char)`. It is non-virtual,
-and `GameMode` has no vtable, so it cannot be found by slot. It can be found through
-the lambda that lives inside it, whose typeinfo string we already have:
+## Request 3 — the signature (paste this)
 
 ```
-h<GameMode>
-string: "ZN8GameMode20_sendTryDestroyBlockERK8BlockPoshE3$_0"
-findclass<sendTryDestroyBlock>
+sig<FF 83 02 D1 FD 7B 04 A9 F5 7B 05 A9 F4 4F 06 A9 FD 03 01 91>
+sig<FF 43 02 D1 FD 7B 04 A9 F5 7B 05 A9 F4 4F 06 A9 FD 03 01 91>
+sig<FF 43 03 D1 FD 7B 04 A9 F5 7B 05 A9 F4 4F 06 A9 FD 03 01 91>
+sig<FF 83 03 D1 FD 7B 04 A9 F5 7B 05 A9 F4 4F 06 A9 FD 03 01 91>
 ```
 
-In that order — the first two are the ones that matter.
+Paste all four. I would rather have four cheap scans than guess at one stack frame size.
 
-**What I need back:** `zaphkiel_out.txt`.
+**Why these.** From the lambda's signature the function takes 3 arguments, so it saves
+`x19-x22` and `x29/x30` (5 register pairs) — that is the `FD 7B 04 A9 F5 7B 05 A9 F4 4F
+06 A9` sequence, which is very distinctive. The differences between the four lines are
+the stack allocation and the frame-pointer offset, which depend on how many bytes of
+locals the function needs. Whichever line returns `matches: 1` is the function.
 
-**What I am looking for in it:** a string xref to
-`ZN8GameMode20_sendTryDestroyBlockERK8BlockPoshE3$_0`. Because that symbol names an
-anonymous-namespace lambda, the only places it can appear in `.data` are the
-function pointer of the `std::function` built from it, or its typeinfo. Either one
-lands within a few instructions of the code that calls `_sendTryDestroyBlock`, and
-`strfn<...>` decompiles the enclosing function for me.
+**What I am looking for in `zaphkiel_out.txt`:** `matches: 1` and a `func @ 0x...`
+address. The `fn=` line also gives me the parameters, which cross-checks the mangling.
 
-**How I will use it:** I will not call `_sendTryDestroyBlock` directly. I will hook
-`GameMode`'s block-break path and drive it with the arguments my aim code already
-computes — `BlockPos` from the raycast, face from the raycast normal. Both are
-written and tested (`platform/AimRay.h`, `platform/MineAim.h`).
+**Why this instead of a vtable slot or a string xref:** the first round showed
+Zaphkiel's `sig<>` works reliably — all seven signatures it generated came back
+`matches: 1`. This is the same mechanism. A vtable slot cannot work (no vtable), and
+a string xref cannot work (no function symbol).
 
-**Fallback if the xref finds nothing:** `fullvf<...>` on a concrete game-mode
-subclass would give the virtual `startDestroyBlock` wrapper instead. I cannot name
-that subclass — `findclass<GameMode>` returned 99 matches and none was a concrete
-subclass. If `findclass<ClientGameMode>` or `findclass<ServerGameMode>` returns
-something in round 2, that is the one.
-
-### Round 1, kept for the record
+**If all four return `matches: 0`:** add these two, which vary the register cutoff in
+case the compiler saved fewer pairs:
 
 ```
-findclass<GameMode>
-findclass<ClientPlayer>
-findclass<Player>
-vfc<GameMode>
-fullvf<GameMode>
+sig<FD 7B 04 A9 F5 7B 05 A9 F4 4F 06 A9 FD 03 01 91 . . 5A D0 3B D5>
+sig<FD 7B 04 A9 F5 7B 05 A9 F4 4F 06 A9 FD 03 01 91>
 ```
 
-Result: `GameMode` resolved to typeinfo only, vtable not found. Productive anyway —
-that is how `_sendTryDestroyBlock` was identified.
+`. .` is a two-byte wildcard here — if that syntax is rejected, drop that line and
+send the plain one only.
 
----
-
-## Request 2 — confirming the player object (nice to have)
-
-```
-findclass<LocalPlayer>
-hier<LocalPlayer>
-struct<Actor><0x238>
-```
-
-**What I need back:** `struct` output — which functions read `Actor+0x238`.
-
-**How I will use it:** the reference already writes player rotation through
-`ActorRotationComponent` (`0x238` on the actor, confirmed two ways). This checks
-whether the break call needs an `Actor*` or an `EntityContext`, which decides
-whether my hook detours `GameMode` or wraps it.
-
----
-
-## Request 3 — inventory (after 1, if you want mining to be useful)
+### Optional, only if you want the inventory work too
 
 ```
 entt<ActorEquipmentComponent>
-entt<PlayerInventoryComponent>
-findclass<Inventory>
-vfc<Inventory><0,20>
+sig<FF 43 01 D1 FD 7B 02 A9 F6 57 03 A9 F4 4F 04 A9 FD 03 00 91 . . . . 5A D0 3B D5>
 ```
 
-**What I need back:** the decompile of the `get_at` slot for each component, and
-the vtable range for `Inventory`.
-
-**How I will use it:** `GamePlayerContext::selectedSlot/hotbar/countItem/selectSlot`
-are all stubs returning 0 or nothing. Reading the equipment component is enough to
-pick the right pickaxe, which is the difference between mining iron ore and mining
-nothing (iron ore needs a stone pickaxe or it drops air).
+The `entt<>` line has worked before (the docs have a verified example), and equipment
+is what decides whether the bot holds a pickaxe — the difference between mining iron
+ore and mining air.
 
 ---
 
-## What is already done and does not need you
+## Honest limits
 
-| Piece | State |
-|---|---|
-| `#mine` command → `MineProcess` | written, tested |
-| Block search → path → break decisions | tested (fake world) |
-| Chunk scan bug where mined blocks lingered | fixed, tested |
-| Double-resolution aim maths | written, tested |
-| Crosshair raycast (face + hit point) | written, tested |
-| `#tunnel <length> [dir]`, 1 wide × 2 high | written, tested |
-| Break hook | **blocked on Request 2** (address of `_sendTryDestroyBlock`) |
-| Inventory reads | blocked on Request 3 (or a different approach) |
+Even with the address in hand, I cannot confirm the call works until it runs on your
+device. What I can do is write it so it fails loudly and safely: resolve the signature
+at load, log the address, refuse to hook if it does not resolve, and unhook cleanly.
+Then your log tells us whether it worked, instead of the game dying.
 
-## Honest limits of what I can check
-
-Everything above that is "tested" was tested against a hand-built world and a fake
-player — see `AUTO_MINE.md`. I have never run this game. When you send the
-Zaphkiel output I can write the hook and it will compile, but whether the
-vtable slot is right, whether the face convention matches, and whether the click
-lands has to be confirmed on your device from the log.
+I have been wrong twice in this file already. Both times the fix was to stop guessing
+at tool syntax and use the mechanism that has actually produced results — `sig<>`.

@@ -74,6 +74,7 @@ echo "== compiling mod layer =="
 MODS=(platform/BaritoneRuntime.cpp platform/GamePlayerContext.cpp platform/InputOverride.cpp
       platform/Log.cpp platform/Paths.cpp platform/PathVisualizer.cpp
       platform/BlockClassifier.cpp platform/WorldTracker.cpp platform/WorldTrackerScan.cpp
+      platform/BlockBreaker.cpp
       sdk/Game.cpp sdk/Memory.cpp sdk/Nbt.cpp)
 MODFLAGS=(-std=c++23 -O1 -Wno-date-time -Wno-unused-result -DFMT_HEADER_ONLY
           -I"$SRC" -I"$ROOT" -I"$ROOT/tests/stubs"
@@ -94,7 +95,7 @@ status=0
 for test in "$ROOT"/tests/*_harness.cpp; do
     name=$(basename "$test" .cpp)
     case "$name" in
-        mine_command_harness)
+        mine_command_harness|breaker_harness)
             # needs the mod layer + preloader stubs
             extra=("$MODOBJ"/*.o "$OBJ"/*.o "$ROOT/tests/stubs/preloader_lite.cpp"
                    "$ROOT/tests/stubs/ubsan_lite.cpp")

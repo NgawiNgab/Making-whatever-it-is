@@ -73,3 +73,26 @@ function pointer stored next to it, call it.
 Once that lands, `platform/MineAim.h` and `platform/AimRay.h` supply the arguments:
 block position from the raycast, face from the raycast's normal. Both are written
 and tested; see `AUTO_MINE.md`.
+
+---
+
+## Round 2 (same request, second run): nothing new
+
+`findclass<sendTryDestroyBlock>` returned the same two typeinfo addresses as round 1,
+just under a different ASLR base:
+
+| | round 1 | round 2 |
+|---|---|---|
+| outer `std::function` typeinfo | `0x72e67453c0` | `0x72dac733c0` |
+| lambda typeinfo | `0x72e67453f0` | `0x72dac733f0` |
+
+Same 0x30 spacing, identical low 12 bits, base shifted by `0xbad2000`. So: same
+static object, as expected. **No function symbol for `_sendTryDestroyBlock` exists** —
+it was inlined into its caller, which is routine for a function used at one call site.
+
+Two lines of that request were wasted on my mistakes:
+`h<GameMode>` needs a header file in `headers/` (there is none), and `string:` is not
+a documented command. Both were avoidable.
+
+**Conclusion: stop looking for this function by name.** Go by the prologue its
+signature implies. Request 3 in `ZAPH_QUEUE.md`.

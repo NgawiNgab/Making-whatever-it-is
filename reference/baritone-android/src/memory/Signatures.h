@@ -4,6 +4,19 @@
 // checked offline against the .text segment and matches exactly one function.
 namespace signatures {
 
+// Break a block. GameMode::_sendTryDestroyBlock(BlockPos const&, unsigned char face),
+// non-virtual, so there is no vtable slot for it.
+//
+// NOT FILLED IN YET. The function was identified from a mangled lambda name
+// (ZN8GameMode20_sendTryDestroyBlockERK8BlockPoshE), which gives its exact
+// signature but not its address. Zaphkiel's sig<> scanner has produced one-match
+// results for every pattern it has been given, so the pending pattern is a scan for
+// the prologue those three parameters imply. See docs/features/ZAPH_QUEUE.md.
+//
+// Empty means "unresolved": the mod must skip the break hook and say so, not scan
+// for something else and hope.
+inline constexpr const char* GameModeSendTryDestroyBlock = "";
+
 inline constexpr const char* ClientInputUpdateSystemInternal_tick =
     "FD 7B BA A9 FC 6F 01 A9 FA 67 02 A9 F8 5F 03 A9 F6 57 04 A9 F4 4F 05 A9 "
     "FD 03 00 91 FF 03 0C D1 59 D0 3B D5 F3 03 00 AA 28 17 40 F9 A8 03 1F F8 "
