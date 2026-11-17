@@ -74,6 +74,27 @@ See `examples/nether_debris.json` for a valid nether scenario.
 Core yaw follows `baritone/utils/Rotation.h`: `0` = south (+Z), `90` = west (-X),
 `180` = north (-Z), `270` = east (+X). `docs/TESTING.md` explains why this matters.
 
+## Batch runs and exit codes
+
+```bash
+baritone-sim validate examples/*.json                 # all files, one JSON report
+baritone-sim run examples/*.json --batch-out build/reports
+baritone-sim run examples/*.json --batch-out build/reports --compact
+baritone-sim run scenario.json --expect completed     # CI: fail unless it completed
+```
+
+- Several scenario files are run in order, in one process. `--batch-out DIR` writes
+  one pretty-printed result per scenario to `DIR/<name>.json` and prints one receipt
+  line per scenario. The scenario's own `name` is sanitised to `[A-Za-z0-9._-]` and
+  cannot leave `DIR`; two scenarios with the same name get an index suffix instead of
+  overwriting each other.
+- `--output` takes exactly one scenario; with several, the CLI says to use
+  `--batch-out` rather than quietly keeping only the last result.
+- Exit code: `0` when every run ended `completed` or `no_target`, `1` when any run
+  ended `timeout`, `blocked`, or `tool_insufficient`. `no_target` is not a failure -
+  a negative example is a legitimate result - but `--expect <status>` makes any
+  specific status mandatory. `2` is usage/parse/validation, `3` is a runtime error.
+
 ## Report
 
 `schema_version` 1. Top-level keys: `status`, `finished`, `bot_active`, `mode`,

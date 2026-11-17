@@ -15,7 +15,7 @@ first-party headless engine and CLI (`scripts/build_engine.sh`, no CMake require
 links each harness separately, then runs the Python `unittest` suites. It exits
 non-zero if any compilation, harness, or Python test fails.
 
-Current result (2026-11-17): **6 C++ harnesses passed, 47 Python tests passed,
+Current result (2026-11-17): **6 C++ harnesses passed, 57 Python tests passed,
 `TESTS PASSED`**.
 
 ## Inventory

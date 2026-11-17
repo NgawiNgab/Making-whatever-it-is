@@ -102,7 +102,10 @@ class CliTests(unittest.TestCase):
 
     def test_tool_insufficient_is_reported_not_faked(self):
         done = run("run", EXAMPLES / "tool_insufficient.json", "--compact")
-        self.assertEqual(done.returncode, 0, done.stderr)
+        # The run itself is a clean, correct result - the scenario asked for a block the
+        # hotbar cannot harvest, and the engine says so. It is reported as an unexpected
+        # outcome by the exit code (1), so --expect is needed to accept it in CI.
+        self.assertEqual(done.returncode, 1, done.stderr)
         payload = json.loads(done.stdout)
         self.assertEqual(payload["status"], "tool_insufficient")
         self.assertTrue(payload["tools"]["insufficient"])
@@ -146,6 +149,100 @@ class CliTests(unittest.TestCase):
             done = run("run", EXAMPLES / "no_target.json", "--output", out, "--compact")
             self.assertEqual(done.returncode, 0, done.stderr)
             self.assertTrue(out.is_file())
+
+
+class MultiScenarioTests(unittest.TestCase):
+    """Several scenarios in one process, and exit codes automation can trust."""
+
+    def test_validate_accepts_several_files(self):
+        done = run("validate", EXAMPLES / "mine_iron_ore.json",
+                   EXAMPLES / "nether_debris.json", EXAMPLES / "tunnel_east.json")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        payload = json.loads(done.stdout)
+        self.assertTrue(payload["valid"])
+        self.assertEqual(len(payload["files"]), 3)
+
+    def test_validate_reports_the_path_and_stops_on_the_first_bad_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = pathlib.Path(tmp) / "bad.json"
+            bad.write_text('{"mode": "mine", "targets": []}', encoding="utf-8")
+            done = run("validate", EXAMPLES / "mine_iron_ore.json", bad)
+            self.assertEqual(done.returncode, 2)
+            self.assertIn("target", done.stderr)
+
+    def test_batch_out_writes_one_named_result_per_scenario(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            done = run("run", EXAMPLES / "mine_iron_ore.json", EXAMPLES / "nether_debris.json",
+                       EXAMPLES / "no_target.json", "--batch-out", tmp, "--compact")
+            # no_target counts as expected; every example here is expected to succeed
+            self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+            receipts = [json.loads(line) for line in done.stdout.strip().splitlines()]
+            self.assertEqual([r["scenario"] for r in receipts],
+                             ["mine-iron-ore", "nether-debris", "no-diamond-here"])
+            for receipt in receipts:
+                written = pathlib.Path(receipt["written"])
+                self.assertTrue(written.is_file())
+                self.assertEqual(written.parent.name, pathlib.Path(tmp).name)
+                self.assertEqual(json.loads(written.read_text())["status"], receipt["status"])
+
+    def test_batch_exit_code_is_one_when_a_run_is_not_expected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            done = run("run", EXAMPLES / "tool_insufficient.json", "--batch-out", tmp,
+                       "--compact")
+            self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+            receipt = json.loads(done.stdout.strip().splitlines()[0])
+            self.assertEqual(receipt["status"], "tool_insufficient")
+            self.assertFalse(receipt["expected"])
+
+    def test_expect_selects_the_status_and_overrides_the_default(self):
+        completed = run("run", EXAMPLES / "mine_iron_ore.json", "--expect", "completed")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        wrong = run("run", EXAMPLES / "mine_iron_ore.json", "--expect", "no_target")
+        self.assertEqual(wrong.returncode, 1)
+        expected_ok = run("run", EXAMPLES / "no_target.json", "--expect", "no_target")
+        self.assertEqual(expected_ok.returncode, 0)
+
+    def test_expect_rejects_an_unknown_status(self):
+        done = run("run", EXAMPLES / "mine_iron_ore.json", "--expect", "definitely")
+        self.assertEqual(done.returncode, 2)
+
+    def test_scenario_name_cannot_escape_the_batch_directory(self):
+        payload = json.loads((EXAMPLES / "mine_iron_ore.json").read_text())
+        payload["name"] = "../../../tmp/escaped"
+        with tempfile.TemporaryDirectory() as tmp:
+            scenario = pathlib.Path(tmp) / "evil.json"
+            scenario.write_text(json.dumps(payload), encoding="utf-8")
+            out = pathlib.Path(tmp) / "out"
+            done = run("run", scenario, "--batch-out", out, "--compact")
+            self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+            written = pathlib.Path(json.loads(done.stdout.strip())["written"]).resolve()
+            self.assertEqual(written.parent, out.resolve(),
+                             "the scenario name escaped the batch output directory")
+            self.assertNotIn("..", written.name)
+            self.assertFalse(pathlib.Path("/tmp/escaped.json").exists())
+
+    def test_duplicate_names_do_not_overwrite_each_other(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scenario = pathlib.Path(tmp) / "one.json"
+            scenario.write_text((EXAMPLES / "mine_iron_ore.json").read_text(), encoding="utf-8")
+            done = run("run", scenario, scenario, "--batch-out", pathlib.Path(tmp) / "out",
+                       "--compact")
+            self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+            receipts = [json.loads(line) for line in done.stdout.strip().splitlines()]
+            self.assertNotEqual(receipts[0]["written"], receipts[1]["written"])
+
+    def test_batch_out_and_output_are_mutually_exclusive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            done = run("run", EXAMPLES / "mine_iron_ore.json",
+                       "--batch-out", tmp, "--output", pathlib.Path(tmp) / "r.json")
+            self.assertEqual(done.returncode, 2)
+            self.assertIn("mutually exclusive", done.stderr)
+
+    def test_output_with_several_scenarios_points_at_batch_out(self):
+        done = run("run", EXAMPLES / "mine_iron_ore.json", EXAMPLES / "tunnel_east.json",
+                   "--output", "/tmp/should-not-be-written.json")
+        self.assertEqual(done.returncode, 2)
+        self.assertIn("--batch-out", done.stderr)
 
 
 if __name__ == "__main__":
