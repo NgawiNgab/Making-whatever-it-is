@@ -77,6 +77,22 @@ const char* Scenario::modeName() const { return mode == Mode::Mine ? "mine" : "t
 Scenario Scenario::fromJson(const json::Value& root) {
     if (!root.isObject()) throw std::runtime_error("scenario root must be a JSON object");
 
+    // Strict schema: an unknown key is a typo, and a typo that is silently ignored
+    // changes what a run means ("quanity": 1 would mine forever). Reject it instead.
+    static constexpr std::string_view kKnownKeys[] = {
+        "name", "description", "mode", "dimension", "min_y", "max_y", "ground_y",
+        "chunk_radius", "player", "hotbar", "inventory", "blocks", "targets",
+        "quantity", "search_radius", "length", "direction", "max_ticks",
+        "tick_delay_ms", "plan_budget_ms", "break_ticks", "explore", "allow_place",
+        "allow_parkour",
+    };
+    for (const auto& [key, value] : root.asObject()) {
+        (void)value;
+        if (std::ranges::find(kKnownKeys, key) == std::end(kKnownKeys)) {
+            throw std::runtime_error("unknown scenario field: " + key);
+        }
+    }
+
     Scenario s;
     const std::string mode = root.require("mode").asString();
     if (mode == "mine") s.mode = Mode::Mine;
@@ -100,6 +116,13 @@ Scenario Scenario::fromJson(const json::Value& root) {
     s.player = {8.5, static_cast<double>(s.groundY), 8.5};
     if (const json::Value* player = root.get("player")) {
         if (!player->isObject()) throw std::runtime_error("player must be an object");
+        for (const auto& [key, value] : player->asObject()) {
+            (void)value;
+            if (key != "x" && key != "y" && key != "z" && key != "yaw" && key != "pitch" &&
+                key != "reach") {
+                throw std::runtime_error("unknown player field: " + key);
+            }
+        }
         s.player.x = optDouble(*player, "x", s.player.x);
         s.player.y = optDouble(*player, "y", s.player.y);
         s.player.z = optDouble(*player, "z", s.player.z);
@@ -119,6 +142,13 @@ Scenario Scenario::fromJson(const json::Value& root) {
     if (const json::Value* hotbar = root.get("hotbar")) {
         for (const json::Value& item : hotbar->asArray()) {
             if (!item.isObject()) throw std::runtime_error("hotbar entries must be objects");
+            for (const auto& [key, value] : item.asObject()) {
+                (void)value;
+                if (key != "name" && key != "count" && key != "tool" && key != "tier" &&
+                    key != "speed" && key != "max_damage") {
+                    throw std::runtime_error("unknown hotbar field: " + key);
+                }
+            }
             HotbarItem stack;
             stack.name = normalizeBlockName(item.require("name").asString());
             stack.count = optInt(item, "count", 1);
@@ -153,6 +183,12 @@ Scenario Scenario::fromJson(const json::Value& root) {
     if (const json::Value* blocks = root.get("blocks")) {
         for (const json::Value& item : blocks->asArray()) {
             if (!item.isObject()) throw std::runtime_error("block entries must be objects");
+            for (const auto& [key, value] : item.asObject()) {
+                (void)value;
+                if (key != "x" && key != "y" && key != "z" && key != "name") {
+                    throw std::runtime_error("unknown block field: " + key);
+                }
+            }
             BlockPlacement block;
             block.x = item.require("x").asInt();
             block.y = item.require("y").asInt();

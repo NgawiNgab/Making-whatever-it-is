@@ -19,3 +19,5 @@ third_party/
 .DS_Store
 .vscode/
 .idea/
+*.tar.gz
+dist/

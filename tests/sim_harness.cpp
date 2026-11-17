@@ -163,6 +163,22 @@ void testScenarioSchema() {
     check(throws([] { parseScenario(R"({"mode": "mine", "targets": ["stone"], "break_ticks": 0})"); },
                  "break_ticks"),
           "break_ticks must be at least one tick");
+    check(throws([] { parseScenario(R"({"mode": "mine", "targets": ["stone"], "quanity": 4})"); },
+                 "unknown scenario field"),
+          "a misspelled top-level field is rejected, not silently ignored");
+    check(throws([] { parseScenario(R"({"mode": "mine", "targets": ["stone"],
+                                      "player": {"x": 1, "yawn": 90}})");
+                 }, "unknown player field"),
+          "a misspelled player field is rejected");
+    check(throws([] { parseScenario(R"({"mode": "mine", "targets": ["stone"],
+                                      "hotbar": [{"name": "x", "tiar": 1}]})");
+                 }, "unknown hotbar field"),
+          "a misspelled hotbar field is rejected");
+    check(throws([] { parseScenario(R"({"mode": "mine", "targets": ["stone"],
+                                      "blocks": [{"x": 1, "y": -20, "z": 1, "name": "stone",
+                                                  "nmae": "oops"}]})");
+                 }, "unknown block field"),
+          "a misspelled block field is rejected");
 }
 
 void testDirectionConvention() {
