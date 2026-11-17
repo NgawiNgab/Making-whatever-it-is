@@ -34,6 +34,7 @@ silently. Lengths and quantities are bounded so a typo cannot start a day-long r
 |---|---|---|
 | `mode` | `mine` or `tunnel` | required |
 | `name` | label echoed into the report | `scenario` |
+| `dimension` | Bedrock dimension id: `0` overworld, `1` nether, `2` end | `0` |
 | `min_y` / `max_y` | world height range; `min_y` must be a multiple of 16 | `-64` / `320` |
 | `ground_y` | top of the generated rock/floor | `-60` |
 | `chunk_radius` | extra chunk columns around the scenario | `2` |
@@ -58,6 +59,15 @@ silently. Lengths and quantities are bounded so a typo cannot start a day-long r
 `3` iron, `4` diamond, `5` netherite. Harvest levels come from
 `baritone::requiredHarvestTier()` — the same function `InventoryBehavior::breakSpeed`
 uses, so the report and the bot cannot disagree.
+
+### Dimension rules
+
+Nether-only blocks (`ancient_debris`, `nether_gold_ore`, `nether_quartz_ore`,
+`quartz_ore`, `netherrack`, `soul_sand`, `soul_soil`, `magma`, `glowstone`,
+`basalt`, `blackstone`) are rejected in an overworld scenario with the fix in the
+error message. Without that check the run "succeeded" while the core warned that
+the ore does not exist in this dimension — a report that contradicts itself.
+See `examples/nether_debris.json` for a valid nether scenario.
 
 ### Yaw convention
 

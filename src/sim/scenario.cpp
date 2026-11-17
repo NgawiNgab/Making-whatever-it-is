@@ -84,6 +84,8 @@ Scenario Scenario::fromJson(const json::Value& root) {
     else throw std::runtime_error("mode must be 'mine' or 'tunnel'");
 
     s.name = optString(root, "name", "scenario");
+    s.dimension = optInt(root, "dimension", 0);
+    requireRange(s.dimension, 0, 2, "dimension");
     s.minY = optInt(root, "min_y", -64);
     s.maxY = optInt(root, "max_y", 320);
     s.groundY = optInt(root, "ground_y", -60);
@@ -162,6 +164,21 @@ Scenario Scenario::fromJson(const json::Value& root) {
             if (std::abs(block.x) > 1'000'000 || std::abs(block.z) > 1'000'000) {
                 throw std::runtime_error("block coordinate is out of range");
             }
+            const bool netherOnly = block.name == "minecraft:ancient_debris" ||
+                                    block.name == "minecraft:nether_gold_ore" ||
+                                    block.name == "minecraft:nether_quartz_ore" ||
+                                    block.name == "minecraft:quartz_ore" ||
+                                    block.name == "minecraft:netherrack" ||
+                                    block.name == "minecraft:soul_sand" ||
+                                    block.name == "minecraft:soul_soil" ||
+                                    block.name == "minecraft:magma" ||
+                                    block.name == "minecraft:glowstone" ||
+                                    block.name == "minecraft:basalt" ||
+                                    block.name == "minecraft:blackstone";
+            if (netherOnly && s.dimension != 1) {
+                throw std::runtime_error(block.name +
+                                         " only exists in the nether; set \"dimension\": 1");
+            }
             s.blocks.push_back(std::move(block));
         }
     }
@@ -172,6 +189,15 @@ Scenario Scenario::fromJson(const json::Value& root) {
     }
     if (s.mode == Mode::Mine && s.targets.empty()) {
         throw std::runtime_error("mine scenarios require at least one entry in targets");
+    }
+    if (s.mode == Mode::Mine && s.dimension != 1) {
+        for (const std::string& target : s.targets) {
+            if (target == "minecraft:ancient_debris" || target == "minecraft:nether_gold_ore" ||
+                target == "minecraft:nether_quartz_ore" || target == "minecraft:quartz_ore") {
+                throw std::runtime_error(target +
+                                         " only exists in the nether; set \"dimension\": 1");
+            }
+        }
     }
 
     s.quantity = optInt(root, "quantity", 0);
@@ -234,6 +260,7 @@ json::Value Scenario::summary() const {
     for (const std::string& target : this->targets) targetValues.push_back(json::Value::makeString(target));
     return json::object({
         {"name", json::Value::makeString(name)},
+        {"dimension", json::Value::makeNumber(dimension)},
         {"mode", json::Value::makeString(modeName())},
         {"min_y", json::Value::makeNumber(minY)},
         {"max_y", json::Value::makeNumber(maxY)},

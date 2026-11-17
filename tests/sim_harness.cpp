@@ -55,15 +55,17 @@ mwi::sim::Scenario parseScenario(const std::string& text) {
 // player's own height, on a stone floor. Small numbers keep the default chunk
 // radius honest; the block is past the search radius only when asked for.
 std::string mineJson(const std::string& block, int distance, int tier, double speed,
-                     int quantity = 1, int maxTicks = 700, int breakTicks = 1) {
+                     int quantity = 1, int maxTicks = 700, int breakTicks = 1,
+                     int dimension = 0, int blocksY = -20) {
     return std::string(R"({
       "name": "harness-mine", "mode": "mine",
+      "dimension": )") + std::to_string(dimension) + R"(,
       "min_y": -64, "max_y": 320, "ground_y": -20, "chunk_radius": 1, "search_radius": 16,
       "player": {"x": 8.5, "y": -20.0, "z": 8.5, "yaw": -90, "pitch": 0, "reach": 4.5},
       "hotbar": [{"name": "minecraft:test_pickaxe", "count": 1, "tool": "pickaxe",
-                  "tier": )") +
-           std::to_string(tier) + R"(, "speed": )" + std::to_string(speed) + R"(, "max_damage": 250}],
-      "blocks": [{"x": )" + std::to_string(8 + distance) + R"(, "y": -20, "z": 8, "name": ")" + block + R"("}],
+                  "tier": )" + std::to_string(tier) + R"(, "speed": )" + std::to_string(speed) + R"(, "max_damage": 250}],
+      "blocks": [{"x": )" + std::to_string(8 + distance) + R"(, "y": )" + std::to_string(blocksY) +
+           R"(, "z": 8, "name": ")" + block + R"("}],
       "targets": [")" + block + R"("],
       "quantity": )" + std::to_string(quantity) + R"(,
       "max_ticks": )" + std::to_string(maxTicks) + R"(,
@@ -234,8 +236,6 @@ void testToolTiers() {
         {3, 6.0, "minecraft:diamond_ore", "minecraft:diamond"},
         {3, 6.0, "minecraft:obsidian", ""},
         {4, 8.0, "minecraft:obsidian", "minecraft:obsidian"},
-        {3, 6.0, "minecraft:ancient_debris", ""},
-        {4, 8.0, "minecraft:ancient_debris", "minecraft:ancient_debris"},
     };
     for (const Case& c : cases) {
         const auto result = mwi::sim::runScenario(
@@ -256,6 +256,52 @@ void testToolTiers() {
                   label + " drops " + c.expectedDrop);
         }
     }
+}
+
+void testDimensionRules() {
+    section("dimension rules");
+    // Nether-only blocks (ancient debris) cannot appear in an overworld scenario, so
+    // their harvest levels are checked here, in dimension 1, rather than in the
+    // overworld tier table above.
+    {
+        auto lowTier = parseScenario(mineJson("minecraft:ancient_debris", 4, 3, 6.0, 1, 800, 1, 1, 32));
+        lowTier.minY = 0;
+        lowTier.maxY = 128;
+        lowTier.groundY = 32;
+        lowTier.player.y = 32.0;
+        const auto result = mwi::sim::runScenario(lowTier);
+        check(result.status == "tool_insufficient" && result.breaks.empty(),
+              "an iron pickaxe cannot harvest ancient debris even in the nether");
+    }
+    {
+        // A nether scenario must run without the "wrong dimension" warning. The block
+        // is placed through the parsed model on purpose: MineBlockScenario::fromJson in
+        // the overworld rejects ancient debris, which is checked separately below.
+        // Parsed with dimension 1: the parser rejects ancient debris in the overworld,
+        // which is checked in the next statement.
+        auto scenario = parseScenario(mineJson("minecraft:ancient_debris", 4, 4, 8.0, 1, 800, 1, 1, 32));
+        scenario.minY = 0;
+        scenario.maxY = 128;
+        scenario.groundY = 32;
+        scenario.player.y = 32.0;
+        const auto result = mwi::sim::runScenario(scenario);
+        check(result.status == "completed" && result.breaks.size() == 1 &&
+                  result.breaks[0].drop == "minecraft:ancient_debris",
+              "ancient debris in the nether drops debris");
+        bool warnedAboutNether = false;
+        for (const auto& line : result.logs) {
+            if (line.message.find("Nether ore") != std::string::npos) warnedAboutNether = true;
+        }
+        check(!warnedAboutNether, "the nether scenario produces no dimension warning");
+    }
+    check(throws([] {
+              parseScenario(mineJson("minecraft:ancient_debris", 4, 4, 8.0));
+          }, "nether"),
+          "ancient debris in the overworld is rejected with the fix in the message");
+    check(throws([] {
+              parseScenario(R"({"mode": "tunnel", "dimension": 3})");
+          }, "dimension"),
+          "an unknown dimension id is rejected");
 }
 
 void testNoTargetAndBlocked() {
@@ -451,6 +497,7 @@ int main() {
         testDirectionConvention();
         testMiningHappyPath();
         testToolTiers();
+        testDimensionRules();
         testNoTargetAndBlocked();
         testQuantityAndInventory();
         testTunnel();

@@ -1,0 +1,23 @@
+{
+  "name": "nether-debris",
+  "description": "dimension 1 (Nether): ancient debris in reach of a diamond pickaxe.",
+  "mode": "mine",
+  "dimension": 1,
+  "min_y": 0,
+  "max_y": 128,
+  "ground_y": 32,
+  "chunk_radius": 1,
+  "search_radius": 8,
+  "player": {"x": 8.5, "y": 32.0, "z": 8.5, "yaw": -90, "pitch": 0, "reach": 4.5},
+  "hotbar": [
+    {"name": "minecraft:diamond_pickaxe", "count": 1, "tool": "pickaxe", "tier": 4, "speed": 8.0, "max_damage": 500}
+  ],
+  "blocks": [
+    {"x": 12, "y": 32, "z": 8, "name": "minecraft:ancient_debris"}
+  ],
+  "targets": ["minecraft:ancient_debris"],
+  "quantity": 1,
+  "max_ticks": 800,
+  "tick_delay_ms": 1,
+  "break_ticks": 1
+}

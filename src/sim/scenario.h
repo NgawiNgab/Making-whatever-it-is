@@ -37,6 +37,11 @@ struct Scenario {
     std::string name = "scenario";
     Mode mode = Mode::Mine;
 
+    // Bedrock dimension ids: 0 overworld, 1 nether, 2 end. Minecraft uses this to
+    // decide whether an ore can exist here at all ("ancient debris is a Nether ore");
+    // a scenario that places Nether blocks in the overworld is rejected rather than
+    // producing a report full of misleading warnings.
+    int dimension = 0;
     int minY = -64;
     int maxY = 320;
     int groundY = -60;

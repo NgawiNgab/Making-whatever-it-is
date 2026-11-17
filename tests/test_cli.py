@@ -1,6 +1,6 @@
 """End-to-end tests for the first-party headless CLI (build/bin/baritone-sim).
 
-These exercise the real binary: argument handling, exit codes, file/ststdout output,
+These exercise the real binary: argument handling, exit codes, file/stdout output,
 strict JSON on stdout, and the two scenario kinds. Every test asserts on parsed JSON,
 never on log text, so a formatting change cannot hide a behavioural regression.
 """
@@ -109,6 +109,17 @@ class CliTests(unittest.TestCase):
         self.assertGreater(payload["tools"]["required_tier"], payload["tools"]["best_tier"])
         self.assertEqual(payload["breaks"], [])
         self.assertTrue(any("harvest level" in text for text in payload["limitations"]))
+
+    def test_nether_example_uses_dimension_one(self):
+        done = run("run", EXAMPLES / "nether_debris.json", "--compact")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        payload = json.loads(done.stdout)
+        self.assertEqual(payload["scenario"]["dimension"], 1)
+        self.assertEqual(payload["status"], "completed")
+        self.assertFalse(
+            [line for line in payload["logs"] if "Nether ore" in line["message"]],
+            "a nether scenario must not be told its ore is in the wrong dimension",
+        )
 
     def test_compact_output_is_one_line(self):
         done = run("run", EXAMPLES / "no_target.json", "--compact")

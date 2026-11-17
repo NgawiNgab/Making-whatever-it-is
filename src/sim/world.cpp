@@ -69,7 +69,8 @@ std::string toolName(baritone::Tool tool) {
 }  // namespace
 
 World::World(const Scenario& scenario) : scenario_(scenario) {
-    snapshot_ = std::make_shared<baritone::WorldSnapshot>(0, scenario.minY, scenario.maxY);
+    snapshot_ = std::make_shared<baritone::WorldSnapshot>(scenario.dimension, scenario.minY,
+                                                         scenario.maxY);
 
     // Bounds include the player, every declared block, and the tunnel endpoint,
     // plus a 16-block margin and the requested chunk radius.
