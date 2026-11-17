@@ -12,9 +12,9 @@ be distributed under the repository `LICENSE` (MIT). See `docs/LEGAL_SCOPE.md`.
 
 ### Asset
 
-| Asset | Contents |
-|---|---|
-| `scenario-lint.tar.gz` | `scenario-lint` (executable) and `LICENSE` |
+| Asset | Contents | Status |
+|---|---|---|
+| `scenario-lint.tar.gz` | `scenario-lint` (executable) and `LICENSE` | **not uploaded** — the upload endpoint (`uploads.github.com`) is not reachable from the environment that cut this release. It is reproducible locally, byte for byte; see below. |
 
 SHA-256 of `scenario-lint.tar.gz` (5483 bytes, reproducible — see below):
 
@@ -23,10 +23,12 @@ b36afe91786aea59e35af972f7ee48a270742bf57aef26f08d02d25d7cb99349
 ```
 
 ```bash
-curl -LO https://github.com/NgawiNgab/Making-whatever-it-is/releases/download/scenario-lint-v1.0.0/scenario-lint.tar.gz
-sha256sum scenario-lint.tar.gz    # must print the hash below
-tar xzf scenario-lint.tar.gz
-./scenario-lint examples/mine_iron_ore.json     # after cloning the repository
+git clone https://github.com/NgawiNgab/Making-whatever-it-is
+cd Making-whatever-it-is && git checkout scenario-lint-v1.0.0
+./tools/scenario-lint/build-release.sh          # prints RELEASE_ASSET_OK <hash>
+sha256sum dist/scenario-lint.tar.gz             # must equal the hash below
+tar xzf dist/scenario-lint.tar.gz -C /tmp
+/tmp/scenario-lint examples/mine_iron_ore.json
 ```
 
 ### What it does
