@@ -30,19 +30,20 @@ its object code must not be distributed. A binary that links it is not
 
 | Tag | Asset | SHA-256 |
 |---|---|---|
-| `scenario-lint-v1.0.0` | `scenario-lint.tar.gz` | `c429051d34b63bc71c7fcf506fbaae2cd35c931960d4a7cf2f4bee1db0c3aefe` |
+| `scenario-lint-v1.0.0` | `scenario-lint.tar.gz` | `b36afe91786aea59e35af972f7ee48a270742bf57aef26f08d02d25d7cb99349` |
 
 Rebuild and verify that asset:
 
 ```bash
-mkdir -p /tmp/rel && cp tools/scenario-lint/scenario_lint.py /tmp/rel/scenario-lint
-cp LICENSE /tmp/rel/LICENSE && chmod +x /tmp/rel/scenario-lint
-tar czf /tmp/rel/scenario-lint.tar.gz -C /tmp/rel scenario-lint LICENSE
-sha256sum /tmp/rel/scenario-lint.tar.gz     # compare with the table above
+./tools/scenario-lint/build-release.sh            # -> dist/scenario-lint.tar.gz
+sha256sum dist/scenario-lint.tar.gz               # compare with the table above
 ```
 
-`gzip` embeds no timestamps when tar streams to stdout, so the archive is
-reproducible from the same inputs; if the hash differs, the inputs changed.
+`build-release.sh` pins sorted names, a fixed mtime, and root ownership, and streams
+tar through `gzip -n`, so the archive is byte-identical across builds on any machine.
+`tests/test_scenario_lint.py` builds it twice and compares. An earlier version of this
+document claimed reproducibility while using a plain `tar czf`; touching a file changed
+the hash, which is how the claim was caught.
 
 ## Not done, and why
 

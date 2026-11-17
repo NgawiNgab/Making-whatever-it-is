@@ -16,15 +16,15 @@ be distributed under the repository `LICENSE` (MIT). See `docs/LEGAL_SCOPE.md`.
 |---|---|
 | `scenario-lint.tar.gz` | `scenario-lint` (executable) and `LICENSE` |
 
-SHA-256 of `scenario-lint.tar.gz`:
+SHA-256 of `scenario-lint.tar.gz` (5483 bytes, reproducible — see below):
 
 ```
-c429051d34b63bc71c7fcf506fbaae2cd35c931960d4a7cf2f4bee1db0c3aefe
+b36afe91786aea59e35af972f7ee48a270742bf57aef26f08d02d25d7cb99349
 ```
 
 ```bash
 curl -LO https://github.com/NgawiNgab/Making-whatever-it-is/releases/download/scenario-lint-v1.0.0/scenario-lint.tar.gz
-sha256sum scenario-lint.tar.gz
+sha256sum scenario-lint.tar.gz    # must print the hash below
 tar xzf scenario-lint.tar.gz
 ./scenario-lint examples/mine_iron_ore.json     # after cloning the repository
 ```
@@ -43,6 +43,16 @@ tar xzf scenario-lint.tar.gz
 - It does not run a simulation. Only `baritone-sim` does that, and that binary is
   not distributed (see above).
 - It does not contact the network, read credentials, or modify any file.
+
+### Rebuilding the asset
+
+```bash
+./tools/scenario-lint/build-release.sh          # -> dist/scenario-lint.tar.gz
+```
+
+Names, mtimes and ownership are pinned and gzip runs with `-n`, so the same commit
+always produces the same hash; `tests/test_scenario_lint.py` asserts it, and also
+asserts that `docs/RELEASES.md` records the hash it computes.
 
 ### Verification in this repository
 

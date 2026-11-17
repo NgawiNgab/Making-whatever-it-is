@@ -143,5 +143,45 @@ class LintBehaviourTests(unittest.TestCase):
             self.assertIn('"quantity"', result.stdout)
 
 
+class ReleaseAssetTests(unittest.TestCase):
+    """The published archive must be reproducible and contain only first-party files."""
+
+    BUILDER = ROOT / "tools" / "scenario-lint" / "build-release.sh"
+
+    def test_asset_is_byte_identical_across_builds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = pathlib.Path(tmp) / "a.tar.gz"
+            second = pathlib.Path(tmp) / "b.tar.gz"
+            for target in (first, second):
+                result = subprocess.run(["bash", str(self.BUILDER), str(target)],
+                                        capture_output=True, text=True, timeout=120, cwd=str(ROOT))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("RELEASE_ASSET_OK", result.stdout)
+            self.assertEqual(first.read_bytes(), second.read_bytes(),
+                             "release asset is not reproducible")
+
+    def test_asset_contains_only_the_executable_and_the_license(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = pathlib.Path(tmp) / "res.tar.gz"
+            subprocess.run(["bash", str(self.BUILDER), str(target)], check=True,
+                           capture_output=True, timeout=120, cwd=str(ROOT))
+            listing = subprocess.run(["tar", "tzf", str(target)], capture_output=True,
+                                     text=True, check=True).stdout.split()
+            self.assertEqual(sorted(listing), ["LICENSE", "scenario-lint"])
+
+    def test_recorded_hash_matches_the_builder(self):
+        documented = (ROOT / "docs" / "RELEASES.md").read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            target = pathlib.Path(tmp) / "res.tar.gz"
+            subprocess.run(["bash", str(self.BUILDER), str(target)], check=True,
+                           capture_output=True, timeout=120, cwd=str(ROOT))
+            import hashlib
+            digest = hashlib.sha256(target.read_bytes()).hexdigest()
+            self.assertIn(digest, documented,
+                          "docs/RELEASES.md and RELEASE_NOTES.md must record the current hash")
+            notes = (ROOT / "RELEASE_NOTES.md").read_text(encoding="utf-8")
+            self.assertIn(digest, notes)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
