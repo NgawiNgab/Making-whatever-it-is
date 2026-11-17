@@ -22,8 +22,15 @@ It is **not** a mod and it does not touch a live Minecraft process. See
 `scripts/build_engine.sh` produces the same binary without CMake (that is what
 `tests/run.sh` uses) into `build/bin/baritone-sim` plus `build/obj/{reference,sim}`.
 
-Exit codes: `0` success, `2` usage/parse/validation/file error, `3` runtime error.
-Errors are a JSON object on stderr: `{"error", "kind", "position"}`.
+Exit codes: `0` success, `1` a run ended unexpectedly (`timeout`/`blocked`/
+`tool_insufficient`), `2` usage/parse/validation/file error, `3` runtime error.
+Errors are a JSON object on stderr: `{"error", "kind", "path", "position"}`, where
+`path` names the offending file when the command took several.
+
+Robustness: 200 truncated variants and 200 randomly corrupted bytes of a valid
+scenario were fed to `validate`; every one produced exit 2 with the JSON error object
+and no crash. A 200k-deep nested array is rejected with
+`JSON nesting is too deep at byte N` rather than a stack overflow.
 
 ## Scenario file
 
