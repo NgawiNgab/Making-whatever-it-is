@@ -92,6 +92,20 @@ Profiling preceded each change; nothing here was tuned by guesswork:
    dominated by process/thread startup and A* on a small world; there is no profile
    showing a hot spot worth changing, so none was changed.
 
+## Phase 2c-2e: dimensions, Android tooling, scenario-lint
+
+| Label | What it measures | Wall | CPU | Peak RSS |
+|---|---|---:|---:|---:|
+| `suite-phase2e` | full `./tests/run.sh`: 6 C++ harnesses (120 checks) + 47 Python tests | 25.017 s | 17.934 s | 260.26 MiB |
+
+The suite grew from 23 to 47 Python tests (dimension rules, Android tooling guards,
+11 scenario-lint tests, 3 release-asset reproducibility tests) while wall time rose
+from 23.709 s to 25.017 s: the new tests are cheap next to the C++ rebuild they ride
+on. `scenario-lint` itself costs about 0.03 s per file.
+
+The scenario reachability scan is measured separately in `docs/ENGINE.md`
+(`search_radius` 64 is about 2.1M blocks and about 0.26 s).
+
 ## Reproduce
 
 ```bash
