@@ -1,0 +1,19 @@
+{
+  "name": "explore-branch-mine",
+  "description": "explore:true with diamonds absent: the bot heads for the branch-mining level instead of giving up. It reports timeout here because the surface-to-Y=-59 descent has no path in this world; a run without a way down must not claim success.",
+  "mode": "mine",
+  "min_y": -64,
+  "max_y": 320,
+  "ground_y": -20,
+  "chunk_radius": 1,
+  "player": {"x": 8.5, "y": -20.0, "z": 8.5, "yaw": -90, "pitch": 0, "reach": 4.5},
+  "hotbar": [
+    {"name": "minecraft:iron_pickaxe", "count": 1, "tool": "pickaxe", "tier": 3, "speed": 6.0, "max_damage": 250}
+  ],
+  "blocks": [],
+  "targets": ["minecraft:diamond_ore"],
+  "quantity": 0,
+  "explore": true,
+  "max_ticks": 60,
+  "tick_delay_ms": 1
+}

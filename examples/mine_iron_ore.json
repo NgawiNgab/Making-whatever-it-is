@@ -1,0 +1,22 @@
+{
+  "name": "mine-iron-ore",
+  "description": "Player stands on a stone floor; one iron ore is four blocks east at eye height.",
+  "mode": "mine",
+  "min_y": -64,
+  "max_y": 320,
+  "ground_y": -20,
+  "chunk_radius": 1,
+  "search_radius": 16,
+  "player": {"x": 8.5, "y": -20.0, "z": 8.5, "yaw": -90, "pitch": 0, "reach": 4.5},
+  "hotbar": [
+    {"name": "minecraft:iron_pickaxe", "count": 1, "tool": "pickaxe", "tier": 3, "speed": 6.0, "max_damage": 250}
+  ],
+  "blocks": [
+    {"x": 12, "y": -20, "z": 8, "name": "minecraft:iron_ore"}
+  ],
+  "targets": ["minecraft:iron_ore"],
+  "quantity": 1,
+  "max_ticks": 800,
+  "tick_delay_ms": 1,
+  "break_ticks": 1
+}

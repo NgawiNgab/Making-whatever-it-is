@@ -1,0 +1,18 @@
+{
+  "name": "tunnel-east",
+  "description": "Buried at y=38 facing east (yaw 270 on the core convention); carve a 4-block corridor.",
+  "mode": "tunnel",
+  "min_y": -64,
+  "max_y": 320,
+  "ground_y": 38,
+  "chunk_radius": 1,
+  "player": {"x": 8.5, "y": 38.0, "z": 8.5, "yaw": 270, "pitch": 0, "reach": 4.5},
+  "hotbar": [
+    {"name": "minecraft:iron_pickaxe", "count": 1, "tool": "pickaxe", "tier": 3, "speed": 6.0}
+  ],
+  "length": 4,
+  "direction": "east",
+  "max_ticks": 1200,
+  "tick_delay_ms": 1,
+  "break_ticks": 1
+}

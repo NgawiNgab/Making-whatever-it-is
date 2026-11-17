@@ -1,5 +1,7 @@
 #include "platform/BaritoneRuntime.h"
 
+#include "platform/CommandText.h"
+
 #include <algorithm>
 #include <bitset>
 #include <cctype>
@@ -372,82 +374,47 @@ void BaritoneRuntime::startGoalFromText(std::string_view text) {
 
 void BaritoneRuntime::startMineFromText(std::string_view filterText, int quantity) {
     // "#mine iron_ore" / "#mine 64 iron_ore,diamond_ore" - same shape as Java Baritone:
-    // an optional leading quantity, then one or more block names.
-    std::string text;
-    text.reserve(filterText.size());
-    for (char c : filterText) {
-        const bool sep = c == ',' || c == ';' || c == '(' || c == ')' || c == '[' || c == ']';
-        text.push_back(sep ? ' ' : c);
-    }
-
-    std::istringstream stream(text);
-    std::vector<std::string> tokens;
-    for (std::string token; stream >> token;) tokens.push_back(std::move(token));
-    if (tokens.empty()) {
-        logger::warn("MINE no block name in '{}'", filterText);
-        return;
-    }
-
-    int parsedQuantity = quantity;
-    std::size_t first = 0;
-    {
-        const std::string& head = tokens.front();
-        bool allDigits = !head.empty() && head.size() <= 9 &&
-                         std::ranges::all_of(head, [](char c) { return c >= '0' && c <= '9'; });
-        if (allDigits) {
-            parsedQuantity = std::stoi(head);
-            first = 1;
-        }
-    }
-    if (first >= tokens.size()) {
-        logger::warn("MINE '{}' has a quantity but no block name", filterText);
+    // an optional leading quantity, then one or more block names. The parsing itself
+    // lives in platform/CommandText.cpp so it can be tested without a game.
+    const parsing::MineRequest request = parsing::parseMineRequest(filterText, quantity);
+    if (!request.ok()) {
+        logger::warn("MINE rejected '{}': {}", filterText, request.error);
         return;
     }
 
     std::string names;
-    for (std::size_t i = first; i < tokens.size(); ++i) {
+    for (const std::string& name : request.names) {
         if (!names.empty()) names += ',';
-        names += tokens[i];
+        names += name;
     }
 
     {
         std::lock_guard lock(goalMutex_);
-        pendingMine_ = MineRequest{std::move(names), std::max(parsedQuantity, 0)};
+        pendingMine_ = MineRequest{std::move(names), request.quantity};
         pendingGoal_.reset();  // one command at a time
     }
-    logger::info("MINE queued blocks='{}' quantity={}", tokens[first],
-                 std::max(parsedQuantity, 0));
+    logger::info("MINE queued blocks='{}' quantity={}", request.names.front(), request.quantity);
 }
 
 void BaritoneRuntime::startTunnelFromText(std::string_view text) {
     // "#tunnel 64" / "#tunnel 64 north" / "#tunnel" (as far as it goes, this way)
-    std::istringstream stream{std::string(text)};
-    std::vector<std::string> tokens;
-    for (std::string token; stream >> token;) {
-        for (char& c : token) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        tokens.push_back(std::move(token));
+    const parsing::TunnelRequest request = parsing::parseTunnelRequest(text);
+    if (!request.ok()) {
+        logger::warn("TUNNEL rejected '{}': {}", text, request.error);
+        return;
     }
 
-    TunnelRequest request;
-    for (const std::string& token : tokens) {
-        if (token == "north" || token == "south" || token == "east" || token == "west") {
-            request.direction = token;
-            continue;
-        }
-        bool digits = !token.empty() &&
-                      std::ranges::all_of(token, [](char c) { return c >= '0' && c <= '9'; });
-        if (digits && token.size() <= 6) request.length = std::stoi(token);
-    }
-
+    TunnelRequest queued;
+    queued.direction = request.direction;
+    queued.length = request.length;
     {
         std::lock_guard lock(goalMutex_);
-        pendingTunnel_ = std::move(request);
+        pendingTunnel_ = std::move(queued);
         pendingGoal_.reset();
         pendingMine_.reset();
     }
     logger::info("TUNNEL queued direction='{}' length={}",
-                 tokens.empty() ? "" : (request.direction.empty() ? "facing" : request.direction),
-                 request.length);
+                 request.direction.empty() ? "facing" : request.direction, request.length);
 }
 
 void BaritoneRuntime::setFovCompensation(float degrees) {

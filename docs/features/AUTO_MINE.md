@@ -14,8 +14,11 @@ block and stop.
 - `BaritoneRuntime::startMineFromText(blocks, quantity)` parses user input:
   `sugarcane`, `iron_ore`, `64 iron_ore`, `iron_ore,diamond_ore`,
   `minecraft:iron_ore`. A leading number is the quantity; 0 means "keep going".
+  The parsing itself lives in `platform/CommandText.cpp` and is covered by 20
+  assertions in `tests/mine_command_harness.cpp` (see `docs/TESTING.md`).
 - `BaritoneRuntime::startTunnelFromText(spec)` parses `64`, `64 north`,
-  `north 64`, or nothing (= the way you are facing).
+  `north 64`, or nothing (= the way you are facing). Conflicting directions are
+  rejected instead of silently taking the last one.
 - Requests are queued and applied at the top of the next tick, **after** the world
   snapshot is published. `MineProcess::mine()` scans the snapshot when it starts,
   so applying it before the snapshot exists would scan nothing.
@@ -109,6 +112,23 @@ player's `PlayerInventory`/container data, which is ordinary component reading.
 A alone turns "walks up and stares" into "walks up and mines". B makes what it
 mines actually worth something.
 
+## Direction bug found by the headless engine
+
+`TunnelProcess::nearestHorizontal()` mapped yaw 0 to **north**. The core's own
+`Rotation.h`/`calcLookDirection` and `schematic/Orientation.cpp` both use yaw 0 =
+**south (+Z)**, so on a real device "tunnel the way I am facing" would have dug the
+opposite way for north/south facings. Fixed in `TunnelProcess.cpp` and covered by
+`tests/sim_harness.cpp` (directions south/west/north/east from yaw 0/90/180/270).
+
+## What the headless engine does prove (and does not)
+
+`baritone-sim` (`docs/ENGINE.md`) runs the real `MineProcess`, `TunnelProcess`, and
+`PathingBehavior` against an in-memory world, with a `PlayerContext` that honours
+`ClickLeft` through the core's own raycast. It proves: target selection, planning,
+movement, tool/harvest rules, tunnel carving, quantity stop, and status reporting.
+It does **not** prove anything about the game: no Bedrock process, no EnTT registry,
+no JNI, no anti-cheat. Stage A below is still the blocker for a real player.
+
 ## Risks
 
 - **Automated mining is what anti-cheat looks for.** This is a personal
@@ -128,3 +148,5 @@ mines actually worth something.
 3. The vendored `reference/` copy is read material. This feature edits it in place.
    If the user wants the mod layer to stay pristine, the `#mine` changes should move
    into a separate `src/` tree that calls `baritone::Baritone` as a library.
+   Since then, `CommandText` was extracted into its own translation unit for exactly
+   that reason, and `src/sim` + `src/cli` are first-party and never edit `reference/`.

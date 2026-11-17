@@ -31,11 +31,13 @@ const char* toName(Direction d) {
 }  // namespace
 
 Direction nearestHorizontal(float yaw) {
-    // yaw 0 = -Z (north), 90 = -X (west), 180 = +Z (south), 270 = +X (east)
+    // Core yaw convention (Rotation.h / calcLookDirection): 0 = +Z (south),
+    // 90 = -X (west), 180 = -Z (north), 270 = +X (east). This previously had
+    // north/south swapped; Orientation.cpp already used the correct mapping.
     float y = std::fmod(yaw + 360.0f, 360.0f);
-    if (y >= 315.0f || y < 45.0f) return Direction::North;
+    if (y >= 315.0f || y < 45.0f) return Direction::South;
     if (y < 135.0f) return Direction::West;
-    if (y < 225.0f) return Direction::South;
+    if (y < 225.0f) return Direction::North;
     return Direction::East;
 }
 

@@ -1,0 +1,8 @@
+{
+  "examples/mine_iron_ore.json": "completed",
+  "examples/tunnel_east.json": "completed",
+  "examples/nether_debris.json": "completed",
+  "examples/no_target.json": "no_target",
+  "examples/tool_insufficient.json": "tool_insufficient",
+  "examples/explore_branch_mine.json": "timeout"
+}
