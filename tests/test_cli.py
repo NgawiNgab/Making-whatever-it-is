@@ -238,6 +238,27 @@ class MultiScenarioTests(unittest.TestCase):
             self.assertEqual(done.returncode, 2)
             self.assertIn("mutually exclusive", done.stderr)
 
+    def test_a_bad_file_in_a_batch_names_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = pathlib.Path(tmp) / "bad.json"
+            bad.write_text("this is not json", encoding="utf-8")
+            for command in ("validate", "run"):
+                with self.subTest(command=command):
+                    done = run(command, EXAMPLES / "mine_iron_ore.json", bad, "--compact")
+                    self.assertEqual(done.returncode, 2)
+                    error = json.loads(done.stderr)
+                    self.assertEqual(error["path"], str(bad))
+                    self.assertEqual(error["kind"], "json_parse_error")
+
+    def test_a_missing_file_in_a_batch_names_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = pathlib.Path(tmp) / "gone.json"
+            done = run("run", EXAMPLES / "mine_iron_ore.json", missing, "--compact")
+            self.assertEqual(done.returncode, 2)
+            error = json.loads(done.stderr)
+            self.assertEqual(error["path"], str(missing))
+            self.assertIn("cannot open file", error["error"])
+
     def test_output_with_several_scenarios_points_at_batch_out(self):
         done = run("run", EXAMPLES / "mine_iron_ore.json", EXAMPLES / "tunnel_east.json",
                    "--output", "/tmp/should-not-be-written.json")

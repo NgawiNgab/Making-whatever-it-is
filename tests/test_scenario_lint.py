@@ -41,6 +41,12 @@ MINIMAL = {
 
 
 class ExampleParityTests(unittest.TestCase):
+    def test_every_file_in_examples_is_a_scenario(self):
+        """A helper file in examples/ would break 'validate examples/*.json' for everyone."""
+        for path in sorted(EXAMPLES.glob("*.json")):
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            self.assertIn("mode", payload, f"{path.name} is not a scenario")
+
     def test_every_example_passes_lint(self):
         result = lint(*sorted(EXAMPLES.glob("*.json")))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

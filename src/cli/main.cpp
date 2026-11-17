@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <memory>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -65,6 +66,16 @@ Value errorValue(std::string_view kind, const std::string& message, std::size_t 
 int printError(std::string_view kind, const std::string& message, std::size_t position = 0,
                int exitCode = 2) {
     std::cerr << mwi::json::stringify(errorValue(kind, message, position), true) << '\n';
+    return exitCode;
+}
+
+// Same report, plus the file it came from. With several scenarios on the command line an
+// error that does not name its file is useless.
+int printErrorFor(const std::string& path, std::string_view kind, const std::string& message,
+                  std::size_t position = 0, int exitCode = 2) {
+    Value error = errorValue(kind, message, position);
+    error.object["path"] = std::make_shared<Value>(Value::makeString(path));
+    std::cerr << mwi::json::stringify(error, true) << '\n';
     return exitCode;
 }
 
@@ -206,11 +217,17 @@ int dispatch(const Options& options) {
     if (options.command == "validate") {
         std::vector<Value> entries;
         for (const std::string& path : options.scenarioPaths) {
-            entries.push_back(mwi::json::object({
-                {"path", Value::makeString(path)},
-                {"valid", Value::makeBool(true)},
-                {"scenario", loadScenario(path).summary()},
-            }));
+            try {
+                entries.push_back(mwi::json::object({
+                    {"path", Value::makeString(path)},
+                    {"valid", Value::makeBool(true)},
+                    {"scenario", loadScenario(path).summary()},
+                }));
+            } catch (const mwi::json::ParseError& error) {
+                return printErrorFor(path, "json_parse_error", error.what(), error.position());
+            } catch (const std::exception& error) {
+                return printErrorFor(path, "validation_or_file_error", error.what());
+            }
         }
         const Value result = options.scenarioPaths.size() == 1
                                  ? entries.front()
@@ -227,7 +244,14 @@ int dispatch(const Options& options) {
 
     for (std::size_t index = 0; index < options.scenarioPaths.size(); ++index) {
         const std::string& path = options.scenarioPaths[index];
-        Scenario scenario = loadScenario(path);
+        Scenario scenario;
+        try {
+            scenario = loadScenario(path);
+        } catch (const mwi::json::ParseError& error) {
+            return printErrorFor(path, "json_parse_error", error.what(), error.position());
+        } catch (const std::exception& error) {
+            return printErrorFor(path, "validation_or_file_error", error.what());
+        }
 
         mwi::sim::RunResult run;
         try {

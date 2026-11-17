@@ -108,6 +108,7 @@ baritone-sim run scenario.json --expect completed     # CI: fail unless it compl
   overwriting each other.
 - `--output` takes exactly one scenario; with several, the CLI says to use
   `--batch-out` rather than quietly keeping only the last result.
+- An error in a batch names its file: `{"error": …, "path": "examples/broken.json"}`.
 - Exit code: `0` when every run ended `completed` or `no_target`, `1` when any run
   ended `timeout`, `blocked`, or `tool_insufficient`. `no_target` is not a failure -
   a negative example is a legitimate result - but `--expect <status>` makes any

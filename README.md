@@ -13,8 +13,9 @@ research material for an experimental Minecraft Bedrock 1.26.62.1 / arm64 mod.
 ## Quick start
 
 ```bash
+make test                  # or: ./scripts/bootstrap.sh && ./tests/run.sh
 ./scripts/bootstrap.sh     # pinned, SHA-256 verified dependencies + C++23 toolchain
-./tests/run.sh             # 6 C++ harnesses + 61 Python regression tests
+./tests/run.sh             # 6 C++ harnesses + 67 Python regression tests
 ./scripts/build.sh         # CMake Release build -> build/bin/baritone-sim
 
 ./build/bin/baritone-sim run examples/mine_iron_ore.json
@@ -23,7 +24,7 @@ research material for an experimental Minecraft Bedrock 1.26.62.1 / arm64 mod.
 ./build/bin/baritone-sim run examples/explore_branch_mine.json --expect timeout  # exploring
 ```
 
-Result: `TESTS PASSED` (6 C++ harnesses, 61 Python tests) and a JSON report with
+Result: `TESTS PASSED` (6 C++ harnesses, 67 Python tests) and a JSON report with
 `status`, breaks, inventory, quality suspects, determinism and resource metrics.
 See [`docs/ENGINE.md`](docs/ENGINE.md) for the scenario schema and report format.
 
@@ -42,7 +43,7 @@ See [`docs/ENGINE.md`](docs/ENGINE.md) for the scenario schema and report format
   artifact published so far (see `RELEASE_NOTES.md` and `docs/RELEASES.md`).
 - Batch runs: `baritone-sim run examples/*.json --batch-out build/reports`, with an
   exit code (`0`/`1`) that CI can trust and `--expect <status>` to pin one status.
-- Six C++ harnesses (including `tests/sim_harness.cpp`, 125 checks) plus 61
+- Six C++ harnesses (including `tests/sim_harness.cpp`, 125 checks) plus 67
   Python regression tests (bootstrap, idempotence, offline, measurement, CLI
   end-to-end, scenario lint, Android tooling), all passing
   through `./tests/run.sh`.
@@ -71,6 +72,7 @@ local tool until the provenance question is settled.
 
 ## Documentation map
 
+- `docs/CONTINUING.md` — resume this work from a fresh checkout: state, blockers, next steps
 - `docs/BOOTSTRAP.md` — pinned dependencies and recovery procedures
 - `docs/ENGINE.md` — headless engine: scenario schema, statuses, report format
 - `docs/RELEASES.md` — what may be released, how, and how to verify it
