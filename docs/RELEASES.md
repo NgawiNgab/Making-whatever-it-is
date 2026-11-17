@@ -47,9 +47,16 @@ the hash, which is how the claim was caught.
 
 ## Not done, and why
 
-- No Release was created in this session: creating one publishes a permanent,
-  public artifact, and the only candidate was a 5.5 KB Python script whose value
-  does not justify an irreversible publish without your confirmation. Everything
-  needed is prepared here.
+- The `scenario-lint-v1.0.0` release **exists** (published, not a draft) but its
+  asset could not be attached: `gh release create … <asset>` failed with `EOF` while
+  uploading to `uploads.github.com`, which this environment cannot reach. The release
+  notes therefore point at the tag and the reproducible local builder instead of a
+  download link. Attaching it later needs one command from a host that can reach the
+  upload endpoint:
+
+  ```bash
+  gh release upload scenario-lint-v1.0.0 dist/scenario-lint.tar.gz
+  ```
+
 - `baritone-sim` is the actually useful tool and is deliberately withheld: shipping
   it would distribute object code derived from the unlicensed `reference/` tree.
