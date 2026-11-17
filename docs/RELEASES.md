@@ -30,7 +30,13 @@ its object code must not be distributed. A binary that links it is not
 
 | Tag | Asset | SHA-256 |
 |---|---|---|
-| `scenario-lint-v1.0.0` | `scenario-lint.tar.gz` | `b36afe91786aea59e35af972f7ee48a270742bf57aef26f08d02d25d7cb99349` |
+| `scenario-lint-v1.0.0` (published from its tag) | `scenario-lint.tar.gz` | `b36afe91786aea59e35af972f7ee48a270742bf57aef26f08d02d25d7cb99349` |
+| current tree (not yet released) | `scenario-lint.tar.gz` | `4a036f7aa26ea3f73e917ed54bad6c236719456e897a41ba9afc4bed7dfdefe7` |
+
+The two hashes differ because the validator was hardened after `v1.0.0` was tagged: a
+deeply nested JSON file used to crash it with a `RecursionError` traceback, and a
+non-UTF-8 file with a `UnicodeDecodeError`. Both are now clean exit-2 failures with a
+message. The published tag is left untouched; the next release carries the fix.
 
 Rebuild and verify that asset:
 

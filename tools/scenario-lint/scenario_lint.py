@@ -253,15 +253,27 @@ def lint_file(path: str) -> tuple[bool, dict[str, Any]]:
             text = handle.read()
     except OSError as error:
         return False, {"file": path, "error": f"cannot read file: {error}", "fix": "check the path"}
+    except UnicodeDecodeError as error:
+        return False, {"file": path,
+                       "error": f"file is not UTF-8 text (byte {error.start})",
+                       "fix": "a scenario must be UTF-8 JSON; re-save it as UTF-8"}
     try:
         data = json.loads(text)
     except json.JSONDecodeError as error:
         return False, {"file": path, "error": f"invalid JSON at line {error.lineno}, column {error.colno}: {error.msg}",
                        "fix": "fix the syntax near that position"}
+    except RecursionError:
+        # json.loads is recursive. A 200k-deep array is not a scenario; say so instead of
+        # dying with a traceback. The engine rejects the same file with its own depth cap.
+        return False, {"file": path, "error": "JSON nesting is too deep to validate",
+                       "fix": "a scenario is a flat object; remove the deeply nested value"}
     try:
         summary = validate(data)
     except Problem as problem:
         return False, {"file": path, "error": problem.message, "fix": problem.fix}
+    except Exception as error:  # noqa: BLE001 - a validator must not crash on input
+        return False, {"file": path, "error": f"could not validate: {type(error).__name__}: {error}",
+                       "fix": "report this as a bug; the file was not judged"}
     return True, {"file": path, "valid": True, "schema_version": SCHEMA_VERSION, "scenario": summary}
 
 

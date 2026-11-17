@@ -143,6 +143,41 @@ class LintBehaviourTests(unittest.TestCase):
             self.assertIn('"quantity"', result.stdout)
 
 
+class AdversarialInputTests(unittest.TestCase):
+    """A validator must never crash. A traceback on bad input is a bug, not a rejection."""
+
+    def test_deeply_nested_json_is_rejected_without_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "deep.json"
+            path.write_text("[" * 200_000 + "]" * 200_000, encoding="utf-8")
+            result = lint(path)
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertIn("too deep", result.stdout)
+
+    def test_empty_file_is_a_clean_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "empty.json"
+            path.write_text("", encoding="utf-8")
+            result = lint(path)
+            self.assertEqual(result.returncode, 2)
+            self.assertNotIn("Traceback", result.stderr)
+
+    def test_a_directory_is_a_clean_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = lint(tmp)
+            self.assertEqual(result.returncode, 2)
+            self.assertNotIn("Traceback", result.stderr)
+
+    def test_non_utf8_bytes_are_a_clean_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "bin.json"
+            path.write_bytes(b'{"mode": "mine", "name": "' + bytes([0xFF, 0xFE]) + b'"}')
+            result = lint(path)
+            self.assertEqual(result.returncode, 2)
+            self.assertNotIn("Traceback", result.stderr)
+
+
 class ReleaseAssetTests(unittest.TestCase):
     """The published archive must be reproducible and contain only first-party files."""
 
@@ -178,9 +213,11 @@ class ReleaseAssetTests(unittest.TestCase):
             import hashlib
             digest = hashlib.sha256(target.read_bytes()).hexdigest()
             self.assertIn(digest, documented,
-                          "docs/RELEASES.md and RELEASE_NOTES.md must record the current hash")
+                          "docs/RELEASES.md must record the hash of the current tree")
+            # RELEASE_NOTES.md documents the published v1.0.0 asset, which was built from
+            # the tag, so it must keep *that* hash even after the tool changes.
             notes = (ROOT / "RELEASE_NOTES.md").read_text(encoding="utf-8")
-            self.assertIn(digest, notes)
+            self.assertIn("b36afe91786aea59e35af972f7ee48a270742bf57aef26f08d02d25d7cb99349", notes)
 
 
 if __name__ == "__main__":
