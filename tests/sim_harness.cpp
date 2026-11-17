@@ -358,6 +358,39 @@ void testNoTargetAndBlocked() {
     }
 }
 
+void testExploreForBlocks() {
+    section("mining: explore_for_blocks");
+    {
+        // The core's "no path" is fatal, so a bot standing on the surface cannot descend
+        // to the branch-mining level. The run must stay bounded and must not claim it
+        // mined the ore: it reports timeout with the progress it actually made.
+        auto scenario = parseScenario(mineJson("minecraft:diamond_ore", 4, 3, 6.0));
+        scenario.blocks.clear();
+        scenario.explore = true;
+        scenario.maxTicks = 60;
+        const auto result = mwi::sim::runScenario(scenario);
+        check(result.status == "timeout", "exploring without a way down ends in timeout, not success");
+        check(result.playerMetrics.targetBlocksBroken == 0,
+              "exploring without a way down breaks no ore");
+        check(result.inventory.count("minecraft:diamond") == 0,
+              "exploring without a way down collects no diamond");
+        const bool logged = std::ranges::any_of(result.logs, [](const mwi::sim::LogLine& line) {
+            return line.message.find("heading to Y=") != std::string::npos;
+        });
+        check(logged, "the run says it is heading to the branch-mining level");
+    }
+    {
+        // Same scenario with explore off: the difference is the branch-mining attempt.
+        auto scenario = parseScenario(mineJson("minecraft:diamond_ore", 4, 3, 6.0));
+        scenario.blocks.clear();
+        scenario.explore = false;
+        scenario.maxTicks = 60;
+        const auto result = mwi::sim::runScenario(scenario);
+        check(result.status == "no_target",
+              "without explore, a missing ore is reported as no_target");
+    }
+}
+
 void testQuantityAndInventory() {
     section("mining: quantity and inventory accounting");
     {
@@ -515,6 +548,7 @@ int main() {
         testToolTiers();
         testDimensionRules();
         testNoTargetAndBlocked();
+        testExploreForBlocks();
         testQuantityAndInventory();
         testTunnel();
         testDeterminismAndBudget();

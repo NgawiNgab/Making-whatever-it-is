@@ -69,6 +69,24 @@ error message. Without that check the run "succeeded" while the core warned that
 the ore does not exist in this dimension — a report that contradicts itself.
 See `examples/nether_debris.json` for a valid nether scenario.
 
+### Examples and what each one proves
+
+| Example | Status | What it demonstrates |
+|---|---|---|
+| `mine_iron_ore.json` | `completed` | the happy path: find, path, mine, collect the drop |
+| `tunnel_east.json` | `completed` | a 12-block corridor carved east, head block included |
+| `nether_debris.json` | `completed` | a dimension 1 scenario; no wrong-dimension warning |
+| `no_target.json` | `no_target` | a negative case is reported honestly, not as a failure |
+| `tool_insufficient.json` | `tool_insufficient` | obsidian with a hand: the run refuses instead of faking drops |
+| `explore_branch_mine.json` | `timeout` | `explore: true` heads for Y=-59 instead of giving up, and says so |
+
+The last two exit 1 by design (`completed`/`no_target` are the successful statuses).
+`--expect timeout` makes the explore example a passing step:
+
+```bash
+baritone-sim run examples/explore_branch_mine.json --expect timeout
+```
+
 ### Yaw convention
 
 Core yaw follows `baritone/utils/Rotation.h`: `0` = south (+Z), `90` = west (-X),

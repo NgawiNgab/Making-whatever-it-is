@@ -20,6 +20,7 @@ research material for an experimental Minecraft Bedrock 1.26.62.1 / arm64 mod.
 ./build/bin/baritone-sim run examples/mine_iron_ore.json
 ./build/bin/baritone-sim run examples/*.json --batch-out build/reports
 ./build/bin/baritone-sim run examples/tunnel_east.json --compact
+./build/bin/baritone-sim run examples/explore_branch_mine.json --expect timeout  # exploring
 ```
 
 Result: `TESTS PASSED` (6 C++ harnesses, 57 Python tests) and a JSON report with
@@ -41,7 +42,7 @@ See [`docs/ENGINE.md`](docs/ENGINE.md) for the scenario schema and report format
   artifact published so far (see `RELEASE_NOTES.md` and `docs/RELEASES.md`).
 - Batch runs: `baritone-sim run examples/*.json --batch-out build/reports`, with an
   exit code (`0`/`1`) that CI can trust and `--expect <status>` to pin one status.
-- Six C++ harnesses (including `tests/sim_harness.cpp`, 120 checks) plus 57
+- Six C++ harnesses (including `tests/sim_harness.cpp`, 125 checks) plus 57
   Python regression tests (bootstrap, idempotence, offline, measurement, CLI
   end-to-end, scenario lint, Android tooling), all passing
   through `./tests/run.sh`.
