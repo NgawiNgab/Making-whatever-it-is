@@ -105,6 +105,21 @@ Not simulated: entities and dropped-item pickup, containers, tool durability los
 Fortune/Silk Touch, random drops, multiplayer, liquids flowing, falling blocks,
 bedrock world generation. `limitations` in every report lists the active ones.
 
+## Cost of the reachability search
+
+`search_radius` is a cube around the player, scanned once per run to decide
+`blocked` vs `no_target`. Measured on this host:
+
+| Scenario | `search_radius` | Blocks in range | Added wall time |
+|---|---:|---:|---:|
+| `examples/mine_iron_ore.json` | 16 | a few | ~0.10 s total run |
+| 40 ores spread over 40x40, quantity 10 | 40 | ~530k | 0.32 s total |
+| one ore 52 blocks away, 40-tick budget | 64 | ~2.1M | 0.26 s total |
+
+The scan is cheap relative to path planning, but it is O(r^3): keep it near the
+default unless a scenario really needs a wide search. It never changes what the bot
+mines - only how a non-result is explained.
+
 ## Known findings from real runs
 
 - `TunnelProcess::nearestHorizontal()` had north and south swapped relative to
