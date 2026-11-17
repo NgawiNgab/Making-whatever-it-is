@@ -52,6 +52,8 @@ file(GLOB MOD_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/sdk/*.cpp")
 
 add_library(${MOD_LIBRARY_NAME} SHARED ${MOD_SOURCES})
+# src/*.cpp (main.cpp / JNI entry point) lives one level below src/, so the mod layer
+# needs the project root on its include path for "baritone/..." and "platform/...".
 target_include_directories(${MOD_LIBRARY_NAME}
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"

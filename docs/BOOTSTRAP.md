@@ -62,6 +62,35 @@ under `third_party/`. They can be overridden. A cold cache makes the first full
 test compile substantially slower; see `docs/PERFORMANCE.md`. Removing
 `third_party/` is safe: re-run `./scripts/bootstrap.sh`.
 
+## Scratch bootstrap (tests and CI)
+
+`BOOTSTRAP_ROOT` and `BOOTSTRAP_CACHE` point the bootstrap at another directory, so a
+test can install into a temporary tree without touching the real `third_party/`:
+
+```bash
+BOOTSTRAP_ROOT=/tmp/bt/third_party BOOTSTRAP_CACHE=/tmp/bt/cache ./scripts/bootstrap.sh
+```
+
+`--check` is read-only: it verifies the pinned archives and the extracted trees and
+prints `BOOTSTRAP_OK`, and it never rewrites `env.sh`. A normal install rewrites
+`env.sh` only when its content actually changed.
+
+## Android build
+
+The Android mod is built with `reference/build.sh`, which configures the top-level
+CMake project with the NDK toolchain and packages `baritone_package`:
+
+```bash
+ANDROID_NDK_HOME=/path/to/ndk ./reference/build.sh
+./reference/build.sh --configure-only     # configure only, no compile
+```
+
+It fails immediately and by name when `ANDROID_NDK_HOME` is unset, missing, or does
+not contain `build/cmake/android.toolchain.cmake`. There is no NDK or device in this
+workspace, so the Android path is **not verified**; `tests/test_android_tooling.py`
+only proves the tooling wires the whole mod layer (including the JNI entry point) and
+refuses to claim more.
+
 ## Failure modes
 
 - `SHA-256 mismatch`: the cached archive is corrupt or a pin changed; delete that
