@@ -116,6 +116,18 @@ done
 [ $modfail -ne 0 ] && exit 1
 echo "mod layer: ${#MODS[@]} files"
 
+# ------------------------------------------------- first-party engine + CLI
+# The headless engine (src/sim, src/cli) is first-party code. scripts/build_engine.sh
+# compiles it with the same compiler/flags and produces build/bin/baritone-sim, which
+# the sim_harness links against; a CMake configure is not required for the test loop.
+echo "== building headless engine + CLI =="
+if ! "$ROOT/scripts/build_engine.sh"; then
+    echo "headless engine build failed" >&2
+    exit 1
+fi
+ENGINE_REF=("$ROOT/build/obj/reference"/*.o)
+ENGINE_SIM=("$ROOT/build/obj/sim"/src_*.o)
+
 # ----------------------------------------------------------------------- tests
 status=0
 passed=0
@@ -130,8 +142,9 @@ for test in "$ROOT"/tests/*_harness.cpp; do
             flags=("${MODFLAGS[@]}")
             ;;
         sim_harness)
-            # first-party simulation engine; see scripts/build.sh for the same objects
-            extra=("$ROOT/build/obj/sim"/*.o "$ROOT/build/obj/reference"/*.o "$OBJ"/*.o)
+            # first-party simulation engine objects (src/sim + the vendored core),
+            # produced by scripts/build_engine.sh just above
+            extra=("${ENGINE_SIM[@]}" "${ENGINE_REF[@]}")
             flags=(-std=c++23 -O1 -I"$ROOT/src" -I"$SRC" -I"$ROOT")
             ;;
         *)

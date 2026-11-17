@@ -8,6 +8,11 @@
 
 namespace baritone {
 
+// Minimum tool tier that yields drops for `block` on the PlayerContext tier scale
+// (0 hand, 1 wood/gold, 2 stone, 3 iron, 4 diamond, 5 netherite). Single source of
+// truth for breakSpeed(); the headless engine uses it too.
+int requiredHarvestTier(const BlockProps& block);
+
 // Hotbar management (Baritone's InventoryBehavior + ToolSet): throwaway blocks to place
 // and the best tool to break a block. Inventory moves wait for server acknowledgement.
 class InventoryBehavior {

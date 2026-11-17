@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# CMake C++ compiler wrapper around the pinned Zig clang/libc++ toolchain.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$HERE/.." && pwd)"
+if [ -z "${ZIG:-}" ] || [ ! -x "${ZIG:-}" ]; then
+    if [ -f "$ROOT/third_party/env.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$ROOT/third_party/env.sh"
+    fi
+fi
+if [ -z "${ZIG:-}" ] || [ ! -x "${ZIG:-}" ]; then
+    echo "zig-cxx: ZIG is not set; run ./scripts/bootstrap.sh" >&2
+    exit 127
+fi
+exec "$ZIG" c++ "$@"

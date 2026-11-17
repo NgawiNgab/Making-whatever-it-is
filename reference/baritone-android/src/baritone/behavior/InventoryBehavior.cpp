@@ -8,10 +8,9 @@
 
 namespace baritone {
 
-namespace {
-
-// Minimum tool tier to get drops (0 = any tool or hand).
-int requiredTier(const BlockProps& block) {
+// Minimum tool tier to get drops (0 = any tool or hand). Exposed so the headless
+// engine reports exactly the rule the bot uses instead of a second copy.
+int requiredHarvestTier(const BlockProps& block) {
     const std::string& n = block.name;
     auto has = [&](std::string_view s) { return n.find(s) != std::string::npos; };
     if (has("obsidian") || has("ancient_debris") || has("netherite_block") || has("respawn_anchor")) return 4;
@@ -22,6 +21,8 @@ int requiredTier(const BlockProps& block) {
     if (has("iron_ore") || has("copper_ore") || has("lapis_ore") || has("iron_block") || has("lapis_block")) return 2;
     return block.requiresTool ? 1 : 0;
 }
+
+namespace {
 
 bool isThrowaway(const HotbarStack& stack) {
     if (stack.empty() || !stack.isBlock) return false;
@@ -44,7 +45,7 @@ double InventoryBehavior::breakSpeed(const HotbarStack& item, const BlockProps& 
     }
     if (!item.empty() && item.tool == Tool::Shears && block.name.find("wool") != std::string::npos) speed = 5;
     if (speed > 1 && item.efficiency > 0) speed += item.efficiency * item.efficiency + 1;
-    bool canHarvest = !block.requiresTool || (rightTool && item.toolTier >= requiredTier(block)) ||
+    bool canHarvest = !block.requiresTool || (rightTool && item.toolTier >= requiredHarvestTier(block)) ||
                       (block.type == BlockType::Cobweb && (item.tool == Tool::Sword || item.tool == Tool::Shears));
     return speed / block.hardness / (canHarvest ? 30.0 : 100.0);
 }
