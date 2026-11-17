@@ -10,9 +10,13 @@ python3 scripts/measure.py --label suite --output reports/metrics.json \
     --directory build --database build -- ./tests/run.sh
 ```
 
-`tests/run.sh` builds the C++23 core and the host-testable mod layer, links each
-harness separately, then runs the Python `unittest` suites. It exits non-zero if
-any compilation, harness, or Python test fails.
+`tests/run.sh` builds the C++23 core and the host-testable mod layer, builds the
+first-party headless engine and CLI (`scripts/build_engine.sh`, no CMake required),
+links each harness separately, then runs the Python `unittest` suites. It exits
+non-zero if any compilation, harness, or Python test fails.
+
+Current result (2026-11-17): **6 C++ harnesses passed, 23 Python tests passed,
+`TESTS PASSED`**.
 
 ## Inventory
 
@@ -22,7 +26,9 @@ any compilation, harness, or Python test fails.
 | `tests/mine_cases_harness.cpp` | a buried iron-ore target causes movement and break requests; quantity-driven mining starts | exact vanilla drop/tool rules |
 | `tests/tunnel_harness.cpp` | aim math, closed-loop convergence, raycast face/distance/occlusion, 1x2 tunnel emits clicks and does not walk through an unbroken wall | that a real game clears the wall |
 | `tests/breaker_harness.cpp` | `BlockBreaker` stays unresolved by default, rejects empty/null/out-of-range addresses, accepts a plausible in-range address and flags it as hand-measured | that the accepted address is the real game function |
-| `tests/mine_command_harness.cpp` | `#mine` text parsing accepts plain/namespaced/comma-separated names and rejects blank/quantity-only input without crashing | the parser's private queue contents; validity of unknown block ids |
+| `tests/mine_command_harness.cpp` | `baritone::platform::parsing` turns `#mine`/`#tunnel` text into exact names, quantities, directions and lengths; separators, casing, negative/absent quantity, and conflicting directions are covered (20 checks) | that the game accepts the resulting block ids |
+| `tests/sim_harness.cpp` | the headless engine end to end: strict JSON, scenario schema, yaw->compass direction, mining happy path, harvest levels for every tier, absent vs blocked vs tool_insufficient, quantity/inventory accounting, tunnel carving in four directions, determinism, result schema, invalid input (113 checks) | Minecraft itself, entities, or the game's break hook |
+| `tests/test_cli.py` | the real `build/bin/baritone-sim` binary: version/help/exit codes, validate accepts every example and rejects malformed/invalid ones, run writes or prints valid JSON, compact mode is one line, identical runs agree on ticks/breaks/counts, nested `--output` directories are created, `tool_insufficient` is reported instead of faked | distribution/packaging |
 | `tests/test_bootstrap.py` | pinned/allowlisted sources, checksum literals, prepared bootstrap check, C++23 compiler probe, incremental-cache guard coverage, measurement exit-code propagation | a fresh download on a machine with no network |
 | `MeasureTests` in `tests/test_bootstrap.py` | CPU/wall/RSS reporting and failure propagation | performance of the game runtime |
 
@@ -41,7 +47,23 @@ host stubs and must never be shipped in an Android build.
   unbroken wall, and `TestPlayer` refuses steps into solids.
 - **False negative risk:** background path calculation may not finish in a
   zero-delay tick loop. Harnesses insert a few milliseconds per tick; the CLI
-  uses a bounded tick loop and a configurable delay.
+  uses a bounded tick loop and a configurable delay, and the runner now waits for
+  each plan (`determinism.plan_wait_timeouts`) instead of racing it. Without that
+  wait, identical runs differed by a tick (`ticks 34` vs `35`), which is exactly
+  the kind of flaky result this suite must not produce.
+- **False positive risk (fixed):** `mine_command_harness` used to assert
+  `check(true, ...)` for every case, so it passed while the parser could queue
+  nothing at all. The parsing moved to `platform/CommandText.cpp` and each case now
+  asserts exact output.
+- **False positive risk (fixed):** the "stops after the requested quantity" case in
+  `mine_cases_harness` called `mine(0, ...)` (keep going) and only checked movement.
+  The fake player there reports `countItem() == 0`, so the quantity stop is not
+  observable; that gap is stated in the harness and covered by
+  `tests/sim_harness.cpp`, whose player counts drops.
+- **Measurement caveat:** `scripts/build_engine.sh` reuses Zig's compiler cache.
+  Deleting only `build/obj` and calling it a "cold" build reports about 1 s instead
+  of the real 130 s; a cold measurement must also clear
+  `third_party/zig-{global,local}-cache`.
 - **False negative risk:** stale objects can link with an old class layout and
   crash. The test runner fingerprints all source/header inputs, external
   headers, compiler version, flags, and `tests/run.sh` before reusing objects.

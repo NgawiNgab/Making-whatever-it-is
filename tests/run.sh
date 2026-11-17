@@ -101,7 +101,7 @@ echo "core: $(wc -l < "$OUT/srcs.txt") files"
 # Only the files a test needs are built; the hooks and JNI entry points cannot be
 # linked on a desktop and are not what these tests cover.
 echo "== compiling mod layer =="
-MODS=(platform/BaritoneRuntime.cpp platform/GamePlayerContext.cpp platform/InputOverride.cpp
+MODS=(platform/BaritoneRuntime.cpp platform/CommandText.cpp platform/GamePlayerContext.cpp platform/InputOverride.cpp
       platform/Log.cpp platform/Paths.cpp platform/PathVisualizer.cpp
       platform/BlockClassifier.cpp platform/WorldTracker.cpp platform/WorldTrackerScan.cpp
       platform/BlockBreaker.cpp

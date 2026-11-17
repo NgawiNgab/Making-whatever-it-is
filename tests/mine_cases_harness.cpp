@@ -79,6 +79,9 @@ int main() {
     }
 
     // ------------------------------------------------------------ quantity stop
+    // Two runs over the same world: one with a quantity (must stop by itself) and one
+    // with 0 (means "keep going"). The earlier version of this section called
+    // mine(0, ...) and claimed to test the quantity stop - it only tested movement.
     {
         std::printf("\n== stops after the requested quantity ==\n");
         auto world = baritone_test::flatWorld(-64, 320, -20);
@@ -94,15 +97,45 @@ int main() {
             std::printf("  [bot%s] %s\n", e ? "!" : "", m.c_str());
         });
         bot.tick(world);
-        // Zero means "keep going forever"; a positive number is the stop condition.
-        bot.mine().mine(0, baritone::BlockFilter({"minecraft:sugarcane"}));
-        check(bot.mine().isActive(), "sugarcane accepted");
+        // LIMITATION, stated instead of hidden: TestPlayer::countItem() always
+        // returns 0, so MineProcess::countHave() can never reach a positive quantity
+        // here and the "collected enough" stop cannot be observed in this harness.
+        // That path is covered by tests/sim_harness.cpp, whose player counts drops
+        // (quantity 1 -> completed after one raw iron). What this harness can prove
+        // is that a quantity does not stop the bot from starting, and that it keeps
+        // working while the filter still has known blocks.
+        bot.mine().mine(2, baritone::BlockFilter({"minecraft:sugarcane"}));
+        check(bot.mine().isActive(), "sugarcane accepted with quantity 2");
 
         auto r = run(bot, player, world, 260);
         std::printf("  ran %d ticks, ended at (%.2f, %.2f, %.2f)\n", r.ticks, r.endPos.x,
                     r.endPos.y, r.endPos.z);
         check(r.sawMove, "bot moved toward the sugarcane field");
         check(r.endPos.x > 9.5, "bot left its starting position");
+        check(r.sawClick, "bot tried to break sugarcane");
+        check(bot.mine().isActive(),
+              "still mining: this fake player never counts items, see the note above");
+    }
+
+    // -------------------------------------------------------- zero means forever
+    {
+        std::printf("\n== quantity 0 keeps mining ==\n");
+        auto world = baritone_test::flatWorld(-64, 320, -20);
+        baritone_test::TestPlayer player;
+        player.setPosition({8.5, -20.0, 8.5});
+        player.setGroundY(-20.0);
+        baritone_test::place(world, {14, -20, 8}, "minecraft:iron_ore");
+
+        baritone::Baritone bot(player, [](const std::string& m, bool e) {
+            std::printf("  [bot%s] %s\n", e ? "!" : "", m.c_str());
+        });
+        bot.tick(world);
+        bot.mine().mine(0, baritone::BlockFilter({"minecraft:iron_ore"}));
+        auto r = run(bot, player, world, 120);
+        check(r.sawMove, "quantity 0 still starts mining");
+        // It may finish when the filter is exhausted; what it must not do is refuse.
+        check(bot.mine().isActive() || r.sawClick,
+              "quantity 0 is not treated as \"mine nothing\"");
     }
 
     std::printf("\n== result ==\n%s\n", gFailures == 0 ? "ALL CHECKS PASSED" : "SOME CHECKS FAILED");

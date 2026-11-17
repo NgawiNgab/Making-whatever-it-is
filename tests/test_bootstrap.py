@@ -77,6 +77,78 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn('cksum "$ROOT/tests/run.sh"', runner)
 
 
+class IdempotenceTests(unittest.TestCase):
+    """Bootstrap must be safe to run twice, and offline must never download."""
+
+    def test_check_is_read_only_and_repeatable(self) -> None:
+        env_file = ROOT / "third_party" / "env.sh"
+        before = {path: path.stat().st_mtime_ns for path in (env_file,)}
+        for _ in range(2):
+            result = subprocess.run(
+                [str(BOOTSTRAP), "--check"],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=120,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertIn("BOOTSTRAP_OK", result.stdout)
+        for path, mtime in before.items():
+            self.assertEqual(path.stat().st_mtime_ns, mtime, f"--check rewrote {path.name}")
+
+    def test_offline_fails_cleanly_without_cache_and_creates_nothing(self) -> None:
+        """--offline with an empty cache must fail, not reach for the network."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "third_party"
+            env = dict(os.environ)
+            env["BOOTSTRAP_ROOT"] = str(root)
+            env["BOOTSTRAP_CACHE"] = str(root / "cache")
+            Path(env["BOOTSTRAP_CACHE"]).mkdir(parents=True)
+            result = subprocess.run(
+                [str(BOOTSTRAP), "--offline"],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=120,
+                env=env,
+            )
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("offline", result.stdout.lower())
+            self.assertEqual(list(Path(env["BOOTSTRAP_CACHE"]).iterdir()), [],
+                             "offline mode created a partial download")
+            # Nothing was extracted into the scratch root: an empty toolchain dir is a
+            # side effect of mkdir, not an install.
+            self.assertEqual(sorted(p.name for p in root.iterdir()), ["cache", "toolchain"])
+            self.assertEqual(list((root / "toolchain").iterdir()), [],
+                             "offline mode extracted a toolchain from nowhere")
+
+    def test_offline_check_uses_the_cache_without_network(self) -> None:
+        """--check on a prepared workspace verifies the pinned archives offline."""
+        if not (ROOT / "third_party" / "cache").is_dir():
+            self.skipTest("no prepared cache in this workspace")
+        result = subprocess.run(
+            [str(BOOTSTRAP), "--check", "--offline"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=180,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("BOOTSTRAP_OK", result.stdout)
+
+    def test_runner_builds_the_engine_without_cmake(self) -> None:
+        runner = (ROOT / "tests" / "run.sh").read_text(encoding="utf-8")
+        self.assertIn("build_engine.sh", runner)
+        # The harness must link the objects that script produced, not a stale glob
+        # that silently matched nothing (that was a real bug: the paths pointed at
+        # build/obj/{sim,reference} before anything built them).
+        self.assertIn('ENGINE_SIM=(', runner)
+        self.assertIn('ENGINE_REF=(', runner)
+
+
 class MeasureTests(unittest.TestCase):
     def test_measurement_records_exit_cpu_wall_and_rss(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
