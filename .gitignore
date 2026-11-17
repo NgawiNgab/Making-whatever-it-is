@@ -1,15 +1,19 @@
 # Build output
 build/
 *.o
+*.a
 *.so
 *.d
+*.pyc
+__pycache__/
 
 # Test output
 tests/out/
+reports/*.json
+reports/*.log
 
-# Dependencies, fetched by tests/run.sh instructions (see docs/features/AUTO_MINE.md)
-third_party/entt/
-third_party/fmt/
+# Dependencies and generated toolchains, restored by scripts/bootstrap.sh
+third_party/
 
 # Editor / OS
 .DS_Store
