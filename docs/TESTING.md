@@ -15,7 +15,7 @@ first-party headless engine and CLI (`scripts/build_engine.sh`, no CMake require
 links each harness separately, then runs the Python `unittest` suites. It exits
 non-zero if any compilation, harness, or Python test fails.
 
-Current result (2026-11-17): **6 C++ harnesses passed, 33 Python tests passed,
+Current result (2026-11-17): **6 C++ harnesses passed, 44 Python tests passed,
 `TESTS PASSED`**.
 
 ## Inventory
@@ -28,6 +28,7 @@ Current result (2026-11-17): **6 C++ harnesses passed, 33 Python tests passed,
 | `tests/breaker_harness.cpp` | `BlockBreaker` stays unresolved by default, rejects empty/null/out-of-range addresses, accepts a plausible in-range address and flags it as hand-measured | that the accepted address is the real game function |
 | `tests/mine_command_harness.cpp` | `baritone::platform::parsing` turns `#mine`/`#tunnel` text into exact names, quantities, directions and lengths; separators, casing, negative/absent quantity, and conflicting directions are covered (20 checks) | that the game accepts the resulting block ids |
 | `tests/sim_harness.cpp` | the headless engine end to end: strict JSON, scenario schema, yaw->compass direction, mining happy path, harvest levels for every tier, absent vs blocked vs tool_insufficient, quantity/inventory accounting, tunnel carving in four directions, nether/overworld dimension rules, determinism, result schema, invalid input (116 checks) | Minecraft itself, entities, or the game's break hook |
+| `tests/test_scenario_lint.py` | `tools/scenario-lint` accepts every shipped example, rejects 13 invalid scenarios, agrees with `baritone-sim validate` on all of them, and reports line/column, field names and fixes | anything about a run's outcome |
 | `tests/test_android_tooling.py` | `reference/build.sh` requires and names a missing NDK, goes through CMake instead of a hand-rolled `find src`, covers every mod-layer source including the JNI entry point, packages library + manifest, and never claims device verification | that the Android library links or loads |
 | `tests/test_cli.py` | the real `build/bin/baritone-sim` binary: version/help/exit codes, validate accepts every example and rejects malformed/invalid ones, run writes or prints valid JSON, compact mode is one line, identical runs agree on ticks/breaks/counts, nested `--output` directories are created, `tool_insufficient` is reported instead of faked | distribution/packaging |
 | `tests/test_bootstrap.py` | pinned/allowlisted sources, checksum literals, prepared bootstrap check, C++23 compiler probe, incremental-cache guard coverage, measurement exit-code propagation | a fresh download on a machine with no network |

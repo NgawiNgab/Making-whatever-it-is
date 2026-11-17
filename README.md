@@ -14,14 +14,14 @@ research material for an experimental Minecraft Bedrock 1.26.62.1 / arm64 mod.
 
 ```bash
 ./scripts/bootstrap.sh     # pinned, SHA-256 verified dependencies + C++23 toolchain
-./tests/run.sh             # 6 C++ harnesses + 33 Python regression tests
+./tests/run.sh             # 6 C++ harnesses + 44 Python regression tests
 ./scripts/build.sh         # CMake Release build -> build/bin/baritone-sim
 
 ./build/bin/baritone-sim run examples/mine_iron_ore.json
 ./build/bin/baritone-sim run examples/tunnel_east.json --compact
 ```
 
-Result: `TESTS PASSED` (6 C++ harnesses, 33 Python tests) and a JSON report with
+Result: `TESTS PASSED` (6 C++ harnesses, 44 Python tests) and a JSON report with
 `status`, breaks, inventory, quality suspects, determinism and resource metrics.
 See [`docs/ENGINE.md`](docs/ENGINE.md) for the scenario schema and report format.
 
@@ -36,9 +36,11 @@ See [`docs/ENGINE.md`](docs/ENGINE.md) for the scenario schema and report format
 - **Headless engine + CLI** (`src/sim`, `src/cli`): deterministic in-memory
   mining and tunnelling through the vendored core, with a strict scenario schema
   and an auditable JSON result. Benchmarks: about 0.1 s and 13 MiB per run.
-- Six C++ harnesses (including `tests/sim_harness.cpp`, 116 checks) plus 33
+- `tools/scenario-lint`: a standalone, first-party scenario validator — the only
+  artifact published so far (see `RELEASE_NOTES.md` and `docs/RELEASES.md`).
+- Six C++ harnesses (including `tests/sim_harness.cpp`, 120 checks) plus 44
   Python regression tests (bootstrap, idempotence, offline, measurement, CLI
-  end-to-end, Android tooling), all passing
+  end-to-end, scenario lint, Android tooling), all passing
   through `./tests/run.sh`.
 - Core bugs found by those runs and fixed: `nearestHorizontal()` had north/south
   swapped against `Rotation.h`; tunnel worlds had no rock to dig.
@@ -67,6 +69,7 @@ local tool until the provenance question is settled.
 
 - `docs/BOOTSTRAP.md` — pinned dependencies and recovery procedures
 - `docs/ENGINE.md` — headless engine: scenario schema, statuses, report format
+- `docs/RELEASES.md` — what may be released, how, and how to verify it
 - `docs/TESTING.md` — test coverage, false positives/negatives, limitations
 - `docs/PERFORMANCE.md` — measured CPU/RAM/time/size and methodology
 - `docs/REFERENCE_BARITONE.md` — analysis of the supplied archive
